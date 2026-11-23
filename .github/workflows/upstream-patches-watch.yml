@@ -1,0 +1,72 @@
+name: Upstream patches watch
+run-name: Watch ps5-linux-patches for new kernel-* tags
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            // Read build_image.sh from main via API (no checkout — runner
+            // workspace has root-owned build leftovers EACCES checkout).
+            const file = await github.rest.repos.getContent({
+              owner, repo, path: 'build_image.sh', ref: 'main',
+            });
+            const buf = Buffer.from(file.data.content, 'base64');
+            let body = buf.toString();
+
+            const patchesRepo = (body.match(/^PATCHES_REPO="([^"]+)"/m) || [])[1];
+            if (patchesRepo !== 'https://github.com/ps5-linux/ps5-linux-patches.git') {
+              core.info(`PATCHES_REPO is a fork (${patchesRepo}) — skipping auto-bump.`);
+              return;
+            }
+
+            // Releases API returns by published_at (most recent first).
+            // Tags API order is not chronological — hex SHA suffixes sort
+            // alphabetically.
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: 'ps5-linux', repo: 'ps5-linux-patches', per_page: 100,
+            });
+            const re = /^kernel-\d+\.\d+\.\d+-[a-f0-9]+$/;
+            const latest = releases.find(r => re.test(r.tag_name))?.tag_name;
+            if (!latest) { core.setFailed('no kernel-*-* tags found'); return; }
+
+            const cur = (body.match(/^PATCHES_REF="([^"]+)"/m) || [])[1];
+            core.info(`upstream latest: ${latest}`);
+            core.info(`current ref:     ${cur}`);
+            if (latest === cur) { core.info('already current — no bump.'); return; }
+
+            const updated = body.replace(
+              new RegExp(`^PATCHES_REF="${cur}"`, 'm'),
+              `PATCHES_REF="${latest}"`,
+            );
+            await github.rest.repos.createOrUpdateFileContents({
+              owner, repo, path: 'build_image.sh', branch: 'main',
+              message: `kernel: auto-bump ${cur} -> ${latest}`,
+              content: Buffer.from(updated).toString('base64'),
+              sha: file.data.sha,
+              committer: { name: 'ps5-linux-bot', email: 'ps5-linux-bot@users.noreply.github.com' },
+              author:    { name: 'ps5-linux-bot', email: 'ps5-linux-bot@users.noreply.github.com' },
+            });
+            core.info(`pushed bump to ${latest}`);
+
+            // Pushes authored by GITHUB_TOKEN don't fire workflow_run /
+            // push events, so trigger-builds.yml won't auto-run. Kick off
+            // the matrix build directly.
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id: 'build-image.yml', ref: 'main',
+              inputs: { distro: 'all' },
+            });
+            core.info('dispatched build-image.yml distro=all');

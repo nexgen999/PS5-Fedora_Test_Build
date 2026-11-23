@@ -1,0 +1,191 @@
+name: Build Image
+run-name: Build Image (${{ inputs.distro || 'fedora' }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      distro:
+        description: 'Distribution'
+        default: 'fedora'
+        type: choice
+        options: [fedora]
+  workflow_call:
+    inputs:
+      distro:
+        type: string
+        default: 'fedora'
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      distros: ${{ steps.set.outputs.distros }}
+    steps:
+      - id: set
+        run: |
+          echo 'distros=["fedora"]' >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    concurrency:
+      group: ps5-image-${{ matrix.distro }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        distro: ${{ fromJson(needs.matrix.outputs.distros) }}
+
+    steps:
+      - name: Checkout image builder
+        uses: actions/checkout@v6
+        with:
+          path: image
+
+      - name: Build ${{ matrix.distro }} image
+        run: |
+          bash image/build_image.sh --distro "${{ matrix.distro }}"
+
+      - name: Set version info
+        id: version
+        run: |
+          psha=$(git -C image/work/ps5-linux-patches rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          kver=$(cat image/linux-bin/VERSION 2>/dev/null || echo "unknown")
+          ts=$(date -u +%Y%m%d-%H%M%S)
+          echo "psha=$psha" >> "$GITHUB_OUTPUT"
+          echo "kver=$kver" >> "$GITHUB_OUTPUT"
+          echo "ts=$ts" >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        run: |
+          ls -lh image/output/*.img
+          sha256sum image/output/*.img
+
+      - name: Compress and split image into 1.5GB parts (7z)
+        run: |
+          sudo apt-get update && sudo apt-get install -y p7zip-full
+          # On compresse et découpe l'image brute en volumes de 1500 Mo (1.5GB) pour éviter la limite des 2Go de GitHub
+          7z a -t7z -mx=4 -v1500m image/output/ps5-${{ matrix.distro }}.img.7z image/output/ps5-${{ matrix.distro }}.img
+
+      - name: Save build metadata
+        run: |
+          mkdir -p meta
+          sha256sum image/output/ps5-${{ matrix.distro }}.img.7z.* \
+            | sed 's|image/output/||' > meta/${{ matrix.distro }}.sha256
+          echo "${{ steps.version.outputs.kver }}" > meta/kver
+          echo "${{ steps.version.outputs.psha }}" > meta/psha
+          echo "${{ steps.version.outputs.ts }}" > meta/ts
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v6
+        with:
+          name: meta-${{ matrix.distro }}
+          path: meta/
+          retention-days: 1
+
+      - name: Upload Fedora image parts artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ps5-${{ matrix.distro }}-img
+          path: image/output/ps5-${{ matrix.distro }}.img.7z.*
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ps5-image-release
+      cancel-in-progress: false
+    if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+    permissions:
+      contents: write
+    steps:
+      - name: Download build metadata
+        uses: actions/download-artifact@v6
+        with:
+          pattern: meta-*
+          path: meta
+          merge-multiple: true
+
+      - name: Download built image parts
+        uses: actions/download-artifact@v6
+        with:
+          name: ps5-fedora-img
+          path: output
+
+      - name: Prepare release body
+        id: body
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const kver = fs.readFileSync('meta/kver', 'utf8').trim();
+            const psha = fs.readFileSync('meta/psha', 'utf8').trim();
+            const ts   = fs.readFileSync('meta/ts',   'utf8').trim();
+
+            const sumLine = fs.readFileSync(path.join('meta', 'fedora.sha256'), 'utf8').trim();
+
+            const body = [
+              'PS5 Linux Fedora 45 FR image — built from latest `main` (Split into 1.5GB parts).',
+              '',
+              `Kernel: \`${kver}\``,
+              `Patches: [\`${psha}\`](https://github.com/ps5-linux/ps5-linux-patches/commit/${psha})`,
+              `Built: \`${ts}\``,
+              '',
+              '**SHA256 checksums:**',
+              '```',
+              sumLine,
+              '```',
+            ].join('\n');
+
+            core.setOutput('text', body);
+
+      - name: Move latest tag to current commit
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const ref = 'tags/latest';
+            try {
+              await github.rest.git.updateRef({
+                ...context.repo, ref, sha: context.sha, force: true,
+              });
+            } catch (e) {
+              if (e.status !== 422) throw e;
+              await github.rest.git.createRef({
+                ...context.repo, ref: 'refs/tags/latest', sha: context.sha,
+              });
+            }
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: latest
+          name: PS5 Linux Fedora 45 FR (latest)
+          body: ${{ steps.body.outputs.text }}
+          files: output/ps5-fedora.img.7z.*
+          make_latest: true
+          overwrite_files: true
+
+      - name: Refresh release publish date
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: rel } = await github.rest.repos.getReleaseByTag({
+              ...context.repo, tag: 'latest',
+            });
+            await github.rest.repos.updateRelease({
+              ...context.repo, release_id: rel.id, draft: true,
+            });
+            await github.rest.repos.updateRelease({
+              ...context.repo, release_id: rel.id, draft: false, make_latest: 'true',
+            });
+            core.info(`re-published release ${rel.id}`);
+            

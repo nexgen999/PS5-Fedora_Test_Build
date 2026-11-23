@@ -1,0 +1,351 @@
+image:
+  name: ps5-fedora
+  distribution: fedora
+  release: "45"
+  description: Fedora GNOME (Wayland) desktop for PS5 (Lightweight & Essential)
+  architecture: x86_64
+
+source:
+  downloader: fedora-http
+  url: https://kojipkgs.fedoraproject.org
+  skip_verification: true
+
+packages:
+  manager: dnf
+  update: true
+  cleanup: true
+
+  sets:
+  - packages:
+    # Full GNOME desktop + GDM display manager.
+    - gnome-shell
+    - gnome-session
+    - gnome-terminal
+    - gdm
+    - mutter
+    - nautilus
+    - gnome-control-center
+    - gnome-settings-daemon
+    - gnome-keyring
+    - gnome-backgrounds
+    - gnome-text-editor
+    - gnome-system-monitor
+    - gnome-disk-utility
+    - gnome-calculator
+    - gnome-tweaks
+    - gnome-extensions-app
+    - gnome-software
+    - gnome-initial-setup
+    - file-roller
+    - loupe
+    - evince
+    - baobab
+    - xdg-desktop-portal-gnome
+    - xdg-user-dirs-gtk
+    - xorg-x11-server-Xwayland
+    - polkit
+
+    # Bluetooth
+    - bluez
+    - bluez-tools
+
+    # Audio / media
+    - pipewire
+    - wireplumber
+    - pipewire-pulseaudio
+
+    # Display / GPU (AMD)
+    - mesa-dri-drivers
+    - mesa-vulkan-drivers
+    - mesa-va-drivers
+    - vulkan-tools
+    - mesa-demos
+    - libinput
+
+    # Networking & Hardware Tools
+    - NetworkManager
+    - NetworkManager-wifi
+    - network-manager-applet
+    - linux-firmware
+    - iw
+    - wpa_supplicant
+    - wireless-regdb
+    - util-linux
+    - git
+    - make
+    - gcc
+    - zlib-devel
+    - python3-PyQt6
+
+    # GTK4 / Libadwaita (PS5 Fedora Manager)
+    - python3-gobject
+    - gtk4
+    - libadwaita
+    - gobject-introspection
+    - desktop-file-utils
+    - xhost
+
+    # Localization (Strict minimum FR/EN)
+    - glibc-all-langpacks
+    - langpacks-fr
+    - langpacks-en
+    - firefox-langpacks
+    - xkeyboard-config
+    - ibus
+    - ibus-gtk3
+    - ibus-gtk4
+
+    # Base System & Tools
+    - zenity
+    - newt
+    - openssh-server
+    - sudo
+    - nano
+    - dracut
+    - kmod
+    - e2fsprogs
+    - parted
+    - cloud-utils-growpart
+    - kexec-tools
+    - zram-generator-defaults
+    - firefox
+    - flatpak
+    - fuse
+    - fuse-libs
+
+    # Essential Fonts
+    - dejavu-sans-fonts
+    - liberation-fonts
+    - fontconfig
+    - google-noto-color-emoji-fonts
+    - google-noto-sans-symbols-fonts
+    action: install
+
+files:
+- path: /etc/hostname
+  generator: hostname
+
+- path: /etc/hosts
+  generator: hosts
+
+- path: /etc/machine-id
+  generator: dump
+
+- path: /etc/kernel/postinst.d/zz-update-boot
+  generator: copy
+  source: /tmp/build-staging/zz-update-boot
+  mode: "0755"
+
+- path: /etc/fstab
+  generator: copy
+  source: /tmp/build-staging/fstab
+
+- path: /usr/local/sbin/grow-rootfs
+  generator: copy
+  source: /tmp/build-staging/grow-rootfs
+  mode: "0755"
+
+- path: /etc/systemd/system/grow-rootfs.service
+  generator: copy
+  source: /tmp/build-staging/grow-rootfs.service
+
+- path: /opt/rpms/
+  generator: copy
+  source: /tmp/build-staging/rpms
+
+actions:
+- trigger: post-unpack
+  action: |-
+    #!/bin/bash
+    set -eux
+    echo "retries=10" >> /etc/dnf/dnf.conf
+    echo "%_install_langs fr,en" > /etc/rpm/macros.image-language-conf
+    dnf makecache || true
+
+- trigger: post-update
+  action: |-
+    #!/bin/bash
+    set -eux
+    passwd -l root
+
+- trigger: post-packages
+  action: |-
+    #!/bin/bash
+    set -eux
+    fc-cache -f 2>/dev/null || true
+
+    # --- RPM Fusion & Flathub ---
+    dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+                   https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm || true
+
+    # --- Steam pilotes graphiques 32 bits ---
+    dnf install -y mesa-vulkan-drivers.i686 mesa-dri-drivers.i686 libva.i686 || true
+
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+
+    # --- Installation de Balena Etcher uniquement ---
+    ETCHER_URL=$(curl -s https://api.github.com/repos/balena-io/etcher/releases/latest | grep "browser_download_url.*x86_64.rpm" | cut -d '"' -f 4 | head -n 1)
+    if [ -n "$ETCHER_URL" ]; then
+        dnf install -y "$ETCHER_URL" || true
+    fi
+
+    # Flatpak minimal (Extension Manager uniquement pour le bureau)
+    flatpak install -y flathub com.mattjakeman.ExtensionManager || true
+
+    # --- Compilation et installation manuelle de ps5-linux-tools ---
+    git clone https://github.com/ps5-linux/ps5-linux-tools /tmp/ps5-linux-tools
+    cd /tmp/ps5-linux-tools
+    make
+    install -m 0755 ps5_control /usr/local/sbin/ps5_control
+    cd /
+    rm -rf /tmp/ps5-linux-tools
+
+    # SSH & Services de base
+    sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/'                /etc/ssh/sshd_config
+    sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    systemctl enable sshd
+    systemctl enable NetworkManager
+    systemctl enable gdm
+    systemctl enable bluetooth.service
+    systemctl set-default graphical.target
+
+    # Firmware AMD PS5 non compressé
+    cd /usr/lib/firmware/amdgpu
+    for f in cyan_skillfish*.xz; do
+        if [ -L "$f" ]; then
+            tgt=$(readlink -f "$f")
+            rm "$f"
+            xz -dc "$tgt" > "${f%.xz}"
+        fi
+    done
+    unxz cyan_skillfish*.xz
+
+- trigger: post-files
+  action: |-
+    #!/bin/bash
+    set -eux
+    systemctl enable grow-rootfs.service
+
+    mkdir -p /etc/selinux
+    if [ -f /etc/selinux/config ]; then
+        sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+    else
+        printf 'SELINUX=disabled\nSELINUXTYPE=targeted\n' > /etc/selinux/config
+    fi
+
+    # --- Default user + GDM autologin ---
+    useradd -m -G wheel,video,input,render -s /bin/bash ps5
+    echo "ps5:ps5" | chpasswd
+    echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel
+
+    mkdir -p /etc/gdm
+    cat > /etc/gdm/custom.conf <<'EOF'
+    [daemon]
+    AutomaticLoginEnable=True
+    AutomaticLogin=ps5
+    EOF
+
+    mkdir -p /home/ps5/.config
+    echo 'yes' > /home/ps5/.config/gnome-initial-setup-done
+    chown -R ps5:ps5 /home/ps5
+
+    # --- Déverrouillage automatique du trousseau GNOME (fix cookies Opera/Chrome) ---
+    mkdir -p /home/ps5/.local/share/keyrings
+    cat > /home/ps5/.local/share/keyrings/login.keyring <<'EOF'
+    [keyring]
+    display-name=Connexion
+    ctime=0
+    mtime=0
+    lock-on-idle=false
+    lock-after=false
+    EOF
+    printf 'login\n' > /home/ps5/.local/share/keyrings/default
+    chmod 700 /home/ps5/.local/share/keyrings
+    chmod 600 /home/ps5/.local/share/keyrings/login.keyring /home/ps5/.local/share/keyrings/default
+    chown -R ps5:ps5 /home/ps5/.local
+
+    # zram swap
+    printf '[zram0]\nzram-size = ram / 2\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf
+
+    # --- Installation Decky Loader ---
+    su - ps5 -c "curl -L https://github.com/SteamDeckHomebrew/decky-installer/releases/latest/download/install_release.sh | sh" || true
+
+    # --- Service systemd automatique pour Fan ON et Boost ON ---
+    cat > /etc/systemd/system/ps5-performance.service <<'EOF'
+    [Unit]
+    Description=PS5 Fan Control and Boost Mode
+    After=multi-user.target
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/sbin/ps5_control --fan on
+    ExecStartPost=/usr/local/sbin/ps5_control --boost on
+    RemainAfterExit=yes
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+    systemctl enable ps5-performance.service
+
+    # --- Installation PS5 Fedora Manager ---
+    git clone https://github.com/nexgen999/ps5-fedora-manager.git /tmp/ps5-fedora-manager
+    cd /tmp/ps5-fedora-manager
+    chmod +x install.sh
+    ./install.sh
+    cd /
+    rm -rf /tmp/ps5-fedora-manager
+    update-desktop-database /usr/share/applications/ || true
+
+    # --- Install custom kernel rpm ---
+    mkdir -p /boot/efi
+    rpm -ivh --nosignature --replacefiles /opt/rpms/*.rpm
+    rm -rf /opt/rpms
+    KVER=$(ls -1t /lib/modules | head -1)
+
+    # --- PS5 internal WiFi ---
+    rm -f /etc/modules-load.d/moal
+    install -d /usr/local/sbin /etc/systemd/system /etc/modprobe.d
+    cat > /etc/modprobe.d/ps5-iw620-noautoload.conf <<'EOF'
+    blacklist moal
+    blacklist mlan
+    EOF
+    cat > /usr/local/sbin/ps5-iw620-load <<'EOF'
+    #!/bin/sh
+    set -eu
+    FW_NAME=nxp/pcieuartiw620_combo_v1.bin
+    FW_DST=/lib/firmware/$FW_NAME
+    FW_SRC=
+    for candidate in "/boot/efi/lib/$FW_NAME" "/boot/lib/$FW_NAME" "$FW_DST"; do
+      [ -f "$candidate" ] && { FW_SRC="$candidate"; break; }
+    done
+    [ -z "$FW_SRC" ] && FW_SRC="$(find /boot /boot/efi -path "*/$FW_NAME" -type f 2>/dev/null | head -n 1)"
+    [ -n "$FW_SRC" ] && [ -f "$FW_SRC" ] && install -D -0644 "$FW_SRC" "$FW_DST"
+    [ -f "$FW_DST" ] || exit 0
+    if [ -d /sys/module/moal ] && [ ! -e /sys/bus/pci/drivers/wlan_pcie/0000:40:00.7 ]; then
+      modprobe -r moal mlan 2>/dev/null || true
+    fi
+    modprobe cfg80211 || true
+    modprobe moal
+    rfkill unblock all 2>/dev/null || true
+    nmcli radio wifi on 2>/dev/null || true
+    EOF
+    chmod 0755 /usr/local/sbin/ps5-iw620-load
+    cat > /etc/systemd/system/ps5-iw620.service <<'EOF'
+    [Unit]
+    Description=Load PS5 IW620 internal WiFi
+    RequiresMountsFor=/boot/efi
+    Wants=systemd-udev-settle.service
+    After=local-fs.target systemd-udev-settle.service
+    Before=NetworkManager.service network-pre.target
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/sbin/ps5-iw620-load
+    RemainAfterExit=yes
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+    depmod -a "$KVER"
+    /etc/kernel/postinst.d/zz-update-boot "$KVER" "/boot/vmlinuz-$KVER" || true
+    systemctl enable ps5-iw620.service
