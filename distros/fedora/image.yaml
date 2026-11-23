@@ -100,7 +100,7 @@ packages:
         - bluez-tools
         - gnome-bluetooth
 
-        # Audio / media & Codecs
+        # Audio / media & Codecs (dépôts Fedora de base)
         - pipewire
         - wireplumber
         - pipewire-pulseaudio
@@ -108,11 +108,7 @@ packages:
         - gstreamer1-plugins-good
         - gstreamer1-plugins-bad-free
         - gstreamer1-plugins-ugly-free
-        - gstreamer1-plugins-bad-freeworld
-        - gstreamer1-plugins-ugly
         - gstreamer1-libav
-        - ffmpeg
-        - ffmpeg-libs
 
         # Display / GPU (AMD)
         - mesa-dri-drivers
@@ -303,9 +299,13 @@ actions:
           chmod 0644 /etc/profile.d/ps5-bash-completion.sh
       fi
 
-      # --- RPM Fusion & Flathub ---
-      dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
-                     https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm || true
+      # --- RPM Fusion, Codecs & Flathub ---
+      dnf install -y --skip-unavailable \
+          https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+          https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm || true
+      dnf makecache || true
+      dnf install -y --allowerasing --skip-unavailable \
+          ffmpeg ffmpeg-libs gstreamer1-plugins-bad-freeworld gstreamer1-plugins-ugly || true
 
       # --- Steam pilotes graphiques 32 bits ---
       dnf install -y mesa-vulkan-drivers.i686 mesa-dri-drivers.i686 libva.i686 || true
