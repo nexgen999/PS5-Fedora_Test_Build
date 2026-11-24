@@ -108,6 +108,7 @@ comes from `image.name` inside that file:
 | Edition | YAML | `image.name` |
 |---|---|---|
 | Base | `image.yaml` | `ps5-fedora` |
+| COSMIC | `fedora-cosmic_edition.yaml` | `ps5-fedora-cosmic_edition` |
 | Desktop | `fedora-desktop_edition.yaml` | `ps5-fedora-desktop_edition` |
 | Gaming | `fedora-gaming_edition.yaml` | `ps5-fedora-gaming_edition` |
 | Dev | `fedora-dev_edition.yaml` | `ps5-fedora-dev_edition` |
