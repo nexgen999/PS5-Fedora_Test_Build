@@ -151,6 +151,18 @@ packages:
         - zlib-devel
         - python3-PyQt6
 
+        # Printing & Scanning
+        - cups
+        - cups-filters
+        - system-config-printer
+        - hplip
+        - gutenprint-cups
+        - splix
+        - sane-backends
+        - sane-backends-drivers-scanners
+        - libsane-hpaio
+        - simple-scan
+
         # Developer Tools (make, gcc, git, Python YAML, build toolchain)
         - git
         - make

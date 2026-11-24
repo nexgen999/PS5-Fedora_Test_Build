@@ -8,8 +8,8 @@ Fichier généré par `tools/edition_editor.py` (bouton « Comparatif des builds
 |---|---|--:|--:|--:|--:|--:|--:|
 | `base` | `ps5-fedora` | 194 | 21 | 0 | 0 | 0 | 0 |
 | `desktop_edition` | `ps5-fedora-desktop_edition` | 181 | 19 | 0 | 0 | 0 | 0 |
-| `dev_edition` | `ps5-fedora-dev_edition` | 179 | 19 | 0 | 0 | 0 | 0 |
-| `gaming_edition` | `ps5-fedora-gaming_edition` | 166 | 22 | 0 | 0 | 0 | 0 |
+| `dev_edition` | `ps5-fedora-dev_edition` | 189 | 19 | 0 | 0 | 0 | 0 |
+| `gaming_edition` | `ps5-fedora-gaming_edition` | 176 | 22 | 0 | 0 | 0 | 0 |
 | `minimal_setup` | `ps5-fedora-minimal_setup` | 39 | 5 | 0 | 0 | 0 | 0 |
 | `test_build` | `ps5-fedora-test_build` | 194 | 22 | 0 | 0 | 0 | 0 |
 
@@ -146,16 +146,16 @@ Fichier généré par `tools/edition_editor.py` (bouton « Comparatif des builds
 | `nautilus-python` | ✓ | ✓ |  |  |  | ✓ |
 | `android-tools` | ✓ | ✓ |  |  |  | ✓ |
 | `wl-clipboard` | ✓ | ✓ |  |  |  | ✓ |
-| `cups` | ✓ | ✓ |  |  |  | ✓ |
-| `cups-filters` | ✓ | ✓ |  |  |  | ✓ |
-| `system-config-printer` | ✓ | ✓ |  |  |  | ✓ |
-| `hplip` | ✓ | ✓ |  |  |  | ✓ |
-| `gutenprint-cups` | ✓ | ✓ |  |  |  | ✓ |
-| `splix` | ✓ | ✓ |  |  |  | ✓ |
-| `sane-backends` | ✓ | ✓ |  |  |  | ✓ |
-| `sane-backends-drivers-scanners` | ✓ | ✓ |  |  |  | ✓ |
-| `libsane-hpaio` | ✓ | ✓ |  |  |  | ✓ |
-| `simple-scan` | ✓ | ✓ |  |  |  | ✓ |
+| `cups` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `cups-filters` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `system-config-printer` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `hplip` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `gutenprint-cups` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `splix` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `sane-backends` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `sane-backends-drivers-scanners` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `libsane-hpaio` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `simple-scan` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
 | `git` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `make` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `gcc` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -251,11 +251,11 @@ Fichier généré par `tools/edition_editor.py` (bouton « Comparatif des builds
 
 ### `dev_edition` — `ps5-fedora-dev_edition`
 
-- **Paquets retirés de la base** : 15 (voir le tableau)
+- **Paquets retirés de la base** : 5 (voir le tableau)
 
 ### `gaming_edition` — `ps5-fedora-gaming_edition`
 
-- **Paquets retirés de la base** : 28 (voir le tableau)
+- **Paquets retirés de la base** : 18 (voir le tableau)
 - **Blocs propres à l'édition** : Gaming stack (Steam, Gamescope, MangoHud, GameMode)
 
 ### `minimal_setup` — `ps5-fedora-minimal_setup`

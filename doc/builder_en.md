@@ -229,6 +229,11 @@ editions ──► kernel ──► build (matrix, one edition at a time) ──
 - The `kernel` job copies the `.rpm` into a runner-owned directory before uploading:
   `linux-bin/` also holds the root-owned `staging/` tree written by the container, which
   `upload-artifact` cannot read.
+- **The kernel is cached.** The key combines the patches tag SHA (`PATCHES_REF` in
+  `build_image.sh`) with a fingerprint of the `docker/kernel-builder{,-rpm}` recipes.
+  When nothing changed since the previous build the `kernel` job restores
+  `kernel-pkg/` (≈45 min saved) instead of recompiling; otherwise it builds and stores
+  the new `.rpm` in the cache (never re-saved on a hit).
 - **A failing edition is isolated.** `build` runs with `fail-fast: false`; the
   "Build <edition> image" step uses `continue-on-error`, the following steps (report,
   compression, artifacts) are skipped for that edition only, then a last step fails the

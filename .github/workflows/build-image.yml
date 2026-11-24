@@ -89,7 +89,55 @@ jobs:
         with:
           path: image
 
+      # The kernel only depends on the PS5 patch tag selected in build_image.sh
+      # (PATCHES_REF) and on the kernel builder recipes. When both are unchanged
+      # the packaged .rpm is restored from the cache and the ~45 min compile is
+      # skipped. Anything else (tag bumped, Dockerfile/scripts touched) changes
+      # the key and forces a rebuild.
+      - name: Resolve kernel cache key
+        id: kkey
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref=$(sed -nE 's/^PATCHES_REF="(.*)"/\1/p' image/build_image.sh | head -1)
+          [ -n "$ref" ] || { echo "::error::PATCHES_REF not found in image/build_image.sh"; exit 1; }
+          psha=$(git ls-remote https://github.com/ps5-linux/ps5-linux-patches "$ref" 2>/dev/null \
+                   | awk 'NR==1{print $1}')
+          [ -n "${psha:-}" ] || psha="noref-${ref}"
+          recipe=$(
+            {
+              cat image/docker/kernel-builder/Dockerfile image/docker/kernel-builder-rpm/Dockerfile
+              find image/docker/kernel-builder image/docker/kernel-builder-rpm -type f | sort | xargs -r cat
+              sed -nE 's/^(PATCHES_REF|PATCHES_REPO|LINUX_REPO)=//p' image/build_image.sh
+            } | sha256sum | cut -c1-16
+          )
+          key="kernel-rpm-${psha:0:16}-${recipe}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "psha=$psha" >> "$GITHUB_OUTPUT"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "Kernel cache key: $key (patches $ref @ ${psha:0:12})"
+
+      - name: Restore cached kernel package
+        id: kcache
+        uses: actions/cache/restore@v4
+        with:
+          path: kernel-pkg
+          key: ${{ steps.kkey.outputs.key }}
+
+      - name: Reuse cached kernel package
+        if: steps.kcache.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p image/linux-bin
+          cp -v kernel-pkg/*.rpm image/linux-bin/
+          if [ -f kernel-pkg/VERSION ]; then
+            cp -v kernel-pkg/VERSION image/linux-bin/
+          fi
+          echo "Kernel package restored from cache: compilation skipped."
+
       - name: Build PS5 kernel package (.rpm)
+        if: steps.kcache.outputs.cache-hit != 'true'
         run: bash image/build_image.sh --distro "${DISTRO}" --variant image --kernel-only
 
       - name: Collect kernel version info
@@ -97,7 +145,10 @@ jobs:
         shell: bash
         run: |
           kver=$(cat image/linux-bin/VERSION 2>/dev/null || echo unknown)
-          psha=$(git -C image/work/ps5-linux-patches rev-parse --short HEAD 2>/dev/null || echo unknown)
+          psha=$(git -C image/work/ps5-linux-patches rev-parse --short HEAD 2>/dev/null \
+                 || sed -n 's/^patches_sha=//p' kernel-pkg/BUILD_INFO 2>/dev/null | cut -c1-7 \
+                 || echo unknown)
+          [ -n "${psha:-}" ] || psha="unknown"
           echo "kver=$kver" >> "$GITHUB_OUTPUT"
           echo "psha=$psha" >> "$GITHUB_OUTPUT"
 
@@ -119,6 +170,17 @@ jobs:
           fi
           sudo chown "$(id -u):$(id -g)" kernel-pkg/*
           chmod 0644 kernel-pkg/*
+          built_sha=$(git -C image/work/ps5-linux-patches rev-parse HEAD 2>/dev/null \
+                      || sed -n 's/^patches_sha=//p' kernel-pkg/BUILD_INFO 2>/dev/null || true)
+          [ -n "${built_sha:-}" ] || built_sha='${{ steps.kkey.outputs.psha }}'
+          {
+            echo "patches_ref=${{ steps.kkey.outputs.ref }}"
+            echo "patches_sha=$built_sha"
+            echo "kernel=$(cat kernel-pkg/VERSION 2>/dev/null || echo unknown)"
+            echo "cache_key=${{ steps.kkey.outputs.key }}"
+          } > kernel-pkg/BUILD_INFO
+          chmod 0644 kernel-pkg/BUILD_INFO
+          cat kernel-pkg/BUILD_INFO
           ls -lh kernel-pkg/
 
       - name: Upload kernel package
@@ -128,6 +190,15 @@ jobs:
           path: kernel-pkg/
           retention-days: 7
           if-no-files-found: error
+
+      # Only a freshly compiled kernel is stored: a cache hit is already in the
+      # cache, so re-saving it would waste the repository cache budget.
+      - name: Save kernel package cache
+        if: steps.kcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: kernel-pkg
+          key: ${{ steps.kkey.outputs.key }}
 
   build:
     needs: [editions, kernel]
