@@ -229,6 +229,13 @@ editions ──► kernel ──► build (matrix, one edition at a time) ──
 - The `kernel` job copies the `.rpm` into a runner-owned directory before uploading:
   `linux-bin/` also holds the root-owned `staging/` tree written by the container, which
   `upload-artifact` cannot read.
+- **A failing edition is isolated.** `build` runs with `fail-fast: false`; the
+  "Build <edition> image" step uses `continue-on-error`, the following steps (report,
+  compression, artifacts) are skipped for that edition only, then a last step fails the
+  job again with a job-summary message. The other matrix entries keep building, and
+  `release` (`!cancelled()`) publishes only the editions that produced their archives:
+  an edition without artifacts just gets a warning. A run can therefore be red while
+  still publishing the valid builds.
 
 ## Outputs
 
@@ -273,6 +280,8 @@ CachyOS) plus `kexec` scripts to switch distributions at boot.
 | "no space left on device" | free space: each edition keeps its chroot plus a 12 GB image |
 | kernel artifact `EACCES` in CI | never upload all of `linux-bin/`: the workflow copies the `.rpm` first |
 | nothing starts after a push | the workflow ignores `tools/**`, `**.md`, `.gitignore`: touch `distros/**` or dispatch `deploy` manually |
+| `Failed to enable unit: Unit x.service does not exist` | the script enables a service whose package is not installed in that edition; `enable_unit` (in `post-packages`) now skips missing units |
+| only one edition is red, the others are published | intended behaviour: failures are isolated; fix the YAML and rerun with `variant` |
 
 ## File map
 

@@ -231,6 +231,13 @@ editions ──► kernel ──► build (matrice, 1 édition à la fois) ─�
 - Le job `kernel` copie le `.rpm` dans un dossier appartenant au runner avant l'upload :
   `linux-bin/` contient aussi l'arbre `staging/` écrit en root par le conteneur, que
   `upload-artifact` ne peut pas lire.
+- **Un échec est isolé par édition.** `build` tourne avec `fail-fast: false` ; l'étape
+  « Build <édition> image » est en `continue-on-error`, les étapes suivantes (report,
+  compression, artefacts) sont sautées pour cette édition seulement, puis une dernière
+  étape remet le job en échec avec un résumé dans le *job summary*. Les autres éditions
+  de la matrice continuent, et `release` (`!cancelled()`) publie uniquement celles qui
+  ont produit leurs archives : une édition sans artefact reçoit un simple avertissement.
+  Un run peut donc être rouge tout en publiant les builds valides.
 
 ## Sorties
 
@@ -275,6 +282,8 @@ CachyOS) avec des scripts `kexec` pour changer de distribution au démarrage.
 | « no space left on device » | libérer de l'espace : chaque édition garde son chroot + image de 12 Go |
 | Artefact noyau en `EACCES` dans le CI | ne pas uploader `linux-bin/` en entier : le workflow copie d'abord le `.rpm` |
 | Rien ne se lance après un push | le workflow ignore `tools/**`, `**.md`, `.gitignore` : toucher `distros/**` ou lancer `deploy` manuellement |
+| `Failed to enable unit: Unit x.service does not exist` | le script active un service dont le paquet n'est pas installé dans l'édition ; `enable_unit` (dans `post-packages`) ignore désormais les unités absentes |
+| Une seule édition est rouge, les autres sont publiées | comportement voulu : les échecs sont isolés ; corriger le YAML puis relancer avec `variant` |
 
 ## Carte des fichiers
 

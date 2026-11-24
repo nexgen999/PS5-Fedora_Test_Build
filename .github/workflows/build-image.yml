@@ -156,10 +156,18 @@ jobs:
           name: kernel-rpm
           path: image/linux-bin
 
+      # A failing edition must never stop the editions that come after it, and
+      # the ones that succeed must still be published. The build step is
+      # therefore isolated (continue-on-error) and the remaining steps are
+      # skipped when it fails; a last step fails the job again so the run stays
+      # honest about the broken edition.
       - name: Build ${{ matrix.edition }} image
+        id: build
+        continue-on-error: true
         run: bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}"
 
       - name: Report
+        if: steps.build.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -169,6 +177,7 @@ jobs:
           sha256sum "image/output/${img}.img"
 
       - name: Compress and split image into 1.5GB parts (7z)
+        if: steps.build.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -178,6 +187,7 @@ jobs:
           7z a -t7z -mx=4 -v1500m "image/output/${img}.img.7z" "image/output/${img}.img"
 
       - name: Save build metadata
+        if: steps.build.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -193,6 +203,7 @@ jobs:
             | head -1 | sed 's/^"//; s/"$//' > meta/description
 
       - name: Upload build metadata
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v6
         with:
           name: meta-${{ matrix.edition }}
@@ -200,12 +211,30 @@ jobs:
           retention-days: 1
 
       - name: Upload image parts artifact
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v6
         with:
           name: ps5-${{ matrix.edition }}-img
           path: image/output/*.img.7z.*
           retention-days: 7
           if-no-files-found: error
+
+      # Re-raise the failure now that the other matrix entries are safe: the job
+      # turns red, the siblings keep building (fail-fast: false) and the release
+      # job still publishes every edition that produced its archives.
+      - name: Report failed edition
+        if: steps.build.outcome != 'success'
+        shell: bash
+        run: |
+          edition='${{ matrix.edition }}'
+          echo "::error::Edition ${edition} failed to build: the other editions keep building and the successful ones are released."
+          {
+            echo "### ❌ Edition \`${edition}\` failed to build"
+            echo
+            echo "The other editions keep building and every successful one is published as usual."
+            echo "Open the **Build ${edition} image** step log above for the failing command."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
   # One dated release per edition. Old releases are never overwritten: each
   # build publishes under its own tag (<image>-<UTC date>-<time>) and only the
@@ -216,6 +245,9 @@ jobs:
     concurrency:
       group: ps5-image-release-${{ matrix.edition }}
       cancel-in-progress: false
+    # Runs even when some edition builds failed (!cancelled()): each matrix leg
+    # only publishes when its own artifacts exist ("Check build output" below),
+    # so a broken edition never blocks or deletes the good releases.
     if: ${{ !cancelled() && needs.editions.result == 'success' }}
     permissions:
       contents: write
