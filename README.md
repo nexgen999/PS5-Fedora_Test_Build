@@ -121,6 +121,10 @@ so every edition gets its own file, its own archives and its own release:
 |---------|------|-------|---------|
 | Base | `image.yaml` | `ps5-fedora` | Full desktop build (reference edition, owns the GitHub *Latest* badge) |
 | COSMIC | `fedora-cosmic_edition.yaml` | `ps5-fedora-cosmic_edition` | COSMIC desktop (greetd/cosmic-greeter) instead of GNOME, same base: codecs, printing, mobile, dev tools, PS5 tools |
+| KDE Plasma | `fedora-kde_edition.yaml` | `ps5-fedora-kde_edition` | Plasma 6 (Wayland) + KDE apps, SDDM with Wayland greeter |
+| Sway | `fedora-sway_edition.yaml` | `ps5-fedora-sway_edition` | Sway (tiling, wlroots) + Waybar/foot/rofi, SDDM Wayland greeter |
+| Niri | `fedora-niri_edition.yaml` | `ps5-fedora-niri_edition` | Niri (scrollable tiling) + Waybar/foot/fuzzel, SDDM Wayland greeter |
+| Miracle WM | `fedora-miraclewm_edition.yaml` | `ps5-fedora-miraclewm_edition` | Miracle WM (tiling on Mir) + Waybar, SDDM Wayland greeter |
 | Desktop | `fedora-desktop_edition.yaml` | `ps5-fedora-desktop_edition` | GNOME desktop without the dev toolchain or gaming stack |
 | Gaming | `fedora-gaming_edition.yaml` | `ps5-fedora-gaming_edition` | GNOME + Steam, Gamescope, MangoHud, GameMode, 32-bit Mesa, Decky Loader |
 | Dev | `fedora-dev_edition.yaml` | `ps5-fedora-dev_edition` | GNOME + full toolchain (gcc, cmake, meson, gdb, rpm-build, Python, git) |

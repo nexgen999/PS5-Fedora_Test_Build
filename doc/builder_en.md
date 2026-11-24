@@ -109,6 +109,10 @@ comes from `image.name` inside that file:
 |---|---|---|
 | Base | `image.yaml` | `ps5-fedora` |
 | COSMIC | `fedora-cosmic_edition.yaml` | `ps5-fedora-cosmic_edition` |
+| KDE Plasma | `fedora-kde_edition.yaml` | `ps5-fedora-kde_edition` |
+| Sway | `fedora-sway_edition.yaml` | `ps5-fedora-sway_edition` |
+| Niri | `fedora-niri_edition.yaml` | `ps5-fedora-niri_edition` |
+| Miracle WM | `fedora-miraclewm_edition.yaml` | `ps5-fedora-miraclewm_edition` |
 | Desktop | `fedora-desktop_edition.yaml` | `ps5-fedora-desktop_edition` |
 | Gaming | `fedora-gaming_edition.yaml` | `ps5-fedora-gaming_edition` |
 | Dev | `fedora-dev_edition.yaml` | `ps5-fedora-dev_edition` |
