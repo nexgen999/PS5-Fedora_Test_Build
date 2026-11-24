@@ -824,7 +824,9 @@ if TK_AVAILABLE:
             self.block_state: dict[tuple[str, str], bool] = {}
             self.pkg_vars: dict[str, tk.BooleanVar] = {}
             self.block_vars: dict[tuple[str, str], tk.BooleanVar] = {}
-            self.pkg_rows: list[tuple[PackageGroup, ttk.Checkbutton, tk.BooleanVar, list]] = []
+            self.pkg_rows: list[
+                tuple[PackageGroup, ttk.Checkbutton, tk.BooleanVar, list[tuple[str, tk.BooleanVar, ttk.Checkbutton]]]
+            ] = []
             self.raw_actions: list[str] | None = None
             self._scroll_target: tk.Canvas | None = None
 
@@ -892,7 +894,7 @@ if TK_AVAILABLE:
 
             panes_holder = ttk.Frame(notebook)
             notebook.add(panes_holder, text="Paquets & blocs")
-            panes = ttk.Panedwindow(panes_holder, orient="horizontal")
+            panes = ttk.PanedWindow(panes_holder, orient="horizontal")
             panes.pack(fill="both", expand=True)
 
             left = ttk.LabelFrame(panes, text="Paquets")
@@ -1030,8 +1032,10 @@ if TK_AVAILABLE:
             self.extra_texts[key] = text
 
         def _collect_extras(self) -> dict[str, list[str]]:
+            # tk.Text renvoie toujours un saut de ligne final : on retire les
+            # lignes vides pour ne pas générer de blocs fantômes.
             return {
-                key: widget.get("1.0", "end").splitlines()
+                key: [line for line in widget.get("1.0", "end").splitlines() if line.strip()]
                 for key, widget in self.extra_texts.items()
             }
 
@@ -1134,7 +1138,7 @@ if TK_AVAILABLE:
                     )
                     check.grid(row=row, column=0, sticky="w", padx=(28, 0))
                     row += 1
-                    rows.append((name, check))
+                    rows.append((name, var, check))
                     self.pkg_vars[name] = var
                 self.pkg_rows.append((group, header, header_var, rows))
             self._refresh_group_labels()
@@ -1206,7 +1210,7 @@ if TK_AVAILABLE:
 
         def _refresh_group_labels(self) -> None:
             for group, header, header_var, rows in self.pkg_rows:
-                checked = sum(1 for _name, var in rows if var.get())
+                checked = sum(1 for _name, var, _check in rows if var.get())
                 header.configure(text=f"{group.title}  ({checked}/{len(rows)})")
                 header_var.set(checked == len(rows) and len(rows) > 0)
 
@@ -1222,7 +1226,7 @@ if TK_AVAILABLE:
             for group, header, _header_var, rows in self.pkg_rows:
                 group_match = query in group.title.lower()
                 visible = False
-                for name, widget in rows:
+                for name, _var, widget in rows:
                     show = (not query) or group_match or (query in name.lower())
                     if show:
                         widget.grid()
