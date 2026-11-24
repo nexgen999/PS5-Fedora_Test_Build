@@ -2,6 +2,11 @@
 
 Builds bootable Linux USB images for PlayStation 5 using Docker containers. Supports Ubuntu 26.04, Arch, CachyOS (Gamescope + Steam), Fedora (GNOME), individually or as a multi-distro image with kexec switching.
 
+## Documentation
+
+- [`doc/editor_fr.md`](doc/editor_fr.md) / [`doc/editor_en.md`](doc/editor_en.md) — the graphical YAML editor: checkboxes, the additions tab, the build comparison
+- [`doc/builder_fr.md`](doc/builder_fr.md) / [`doc/builder_en.md`](doc/builder_en.md) — how the builder works: kernel/rootfs/image stages, edition YAML anatomy, CI and releases
+
 ## Prerequisites
 
 - Docker (with permission to run `--privileged` containers) — install as per your distro's instructions

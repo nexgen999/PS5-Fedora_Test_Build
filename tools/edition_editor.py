@@ -1360,6 +1360,12 @@ if TK_AVAILABLE:
                     + ", ".join(missing)
                     + " ne sont pas cochés : l'étape échouera."
                 )
+            extras_filled = any(self._collect_extras().values())
+            if self.raw_actions and extras_filled:
+                problems.append(
+                    "Cette édition garde ses scripts tels quels (mode verrouillé) : les "
+                    "champs « Ajouts » ne seront pas écrits dans le YAML."
+                )
             flatpaks = [line for line in self._collect_extras()["flatpaks"] if line.strip()]
             if flatpaks and not self.block_state.get(("post-packages", "Flathub"), True):
                 problems.append(
