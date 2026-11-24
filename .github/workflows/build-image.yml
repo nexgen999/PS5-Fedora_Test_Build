@@ -558,7 +558,10 @@ jobs:
           set -euo pipefail
           # La release existe avant les uploads : chaque job de la matrice ajoute
           # ensuite ses propres volumes, sans se disputer la création du tag.
-          gh release create "$TAG" --title "$TITLE" --notes-file body.md \
+          # `--repo` est obligatoire : sans checkout il n'y a pas de dépôt git,
+          # et `gh` échouerait sur "fatal: not a git repository".
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "$TITLE" --notes-file body.md \
             --target "$GITHUB_SHA" --latest
           echo "created=true" >> "$GITHUB_OUTPUT"
 
@@ -597,7 +600,8 @@ jobs:
             echo "::warning::Aucune archive pour l'édition ${{ matrix.edition }} : rien à publier."
             exit 0
           fi
-          gh release upload "$TAG" "${parts[@]}" --clobber
+          # `--repo` : ce job n'a pas de checkout, donc pas de dépôt git à deviner.
+          gh release upload "$TAG" "${parts[@]}" --repo "$GITHUB_REPOSITORY" --clobber
 
   # Élagage : on ne garde que KEEP_RELEASES releases datées (une par run).
   release-prune:
