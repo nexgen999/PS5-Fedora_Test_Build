@@ -4,8 +4,14 @@ Builds bootable Linux USB images for PlayStation 5 using Docker containers. Supp
 
 ## Documentation
 
-- [`doc/editor_fr.md`](doc/editor_fr.md) / [`doc/editor_en.md`](doc/editor_en.md) — the graphical YAML editor: checkboxes, the additions tab, the build comparison
+Everything is available in French and English (`doc/README.md` is the index):
+
+- [`doc/editions_fr.md`](doc/editions_fr.md) / [`doc/editions_en.md`](doc/editions_en.md) — every Fedora build: content, desktop/session, autologin, when to pick it, limits
 - [`doc/builder_fr.md`](doc/builder_fr.md) / [`doc/builder_en.md`](doc/builder_en.md) — how the builder works: kernel/rootfs/image stages, edition YAML anatomy, CI and releases
+- [`doc/editor_fr.md`](doc/editor_fr.md) / [`doc/editor_en.md`](doc/editor_en.md) — the graphical YAML editor: checkboxes, the additions tab, the build comparison
+- [`doc/ci_fr.md`](doc/ci_fr.md) / [`doc/ci_en.md`](doc/ci_en.md) — GitHub Actions: triggers, parallel matrix, kernel cache, artifacts, dated releases and pruning
+- [`doc/troubleshooting_fr.md`](doc/troubleshooting_fr.md) / [`doc/troubleshooting_en.md`](doc/troubleshooting_en.md) — symptom/ cause/ fix catalogue for builds, CI, YAML and the running PS5
+- [`doc/README.md`](doc/README.md) — documentation index and reading order
 
 ## Prerequisites
 

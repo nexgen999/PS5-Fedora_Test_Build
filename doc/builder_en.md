@@ -4,7 +4,10 @@ This repository builds bootable Linux USB images for the PlayStation 5 (a GPT di
 image you flash to a USB drive) by chaining Docker containers: compiling the PS5
 kernel, building the distribution root filesystem, then assembling the disk image.
 
+- Build catalogue: [`editions_en.md`](editions_en.md)
 - Graphical YAML editor: [`editor_en.md`](editor_en.md)
+- CI pipeline: [`ci_en.md`](ci_en.md) — Troubleshooting: [`troubleshooting_en.md`](troubleshooting_en.md)
+- Documentation index: [`README.md`](README.md)
 - Version française : [`builder_fr.md`](builder_fr.md)
 
 ## Overview

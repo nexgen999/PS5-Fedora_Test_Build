@@ -4,7 +4,10 @@ Le dépôt construit des images Linux amorçables pour PlayStation 5 (image disq
 flasher sur clé USB) en enchaînant des conteneurs Docker : compilation du noyau PS5,
 construction du rootfs de la distribution, puis assemblage de l'image disque.
 
+- Catalogue des builds : [`editions_fr.md`](editions_fr.md)
 - Éditeur graphique des YAML : [`editor_fr.md`](editor_fr.md)
+- Pipeline CI : [`ci_fr.md`](ci_fr.md) — Dépannage : [`troubleshooting_fr.md`](troubleshooting_fr.md)
+- Index de la documentation : [`README.md`](README.md)
 - English version: [`builder_en.md`](builder_en.md)
 
 ## Vue d'ensemble
