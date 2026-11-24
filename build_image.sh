@@ -5,10 +5,12 @@ export DOCKER_DEFAULT_PLATFORM=linux/amd64
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DISTRO="ubuntu2604"
+VARIANT="image"
 KERNEL_SRC=""
 CLEAN=false
 IMG_SIZE=12000
 KERNEL_ONLY=false
+PRINT_NAME=false
 PATCHES_REF="kernel-7.3.3-c8fe83a"
 
 MULTI_DISTROS="ubuntu2604 arch cachyos"
@@ -18,24 +20,28 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --distro     Distribution to build: ubuntu2604, arch, cachyos, fedora, proxmox, debian, bazzite, bazzite-deck, batocera, all (default: ubuntu2604)"
+    echo "  --variant    Edition YAML to build: distros/<distro>/<variant>.yaml (default: image)"
     echo "  --kernel     Path to kernel source directory (default: auto-clone to work/linux/)"
     echo "  --img-size   Disk image size in MB (default: 12000, 32000 for --distro all)"
     echo "  --clean      Remove all cached build artifacts and start from scratch"
     echo "  --clean-only Remove all cached build artifacts and exit"
     echo "  --kernel-only  Build and package the kernel only, then exit"
     echo "  --patches-ref  Branch, tag, or commit SHA for patches (default: v1.2)"
+    echo "  --print-name   Print the image name resolved from the YAML, then exit"
     exit 1
 }
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --distro)    DISTRO="$2";          shift 2 ;;
+        --variant)   VARIANT="${2:-image}"; shift 2 ;;
         --kernel)    KERNEL_SRC="$2";      shift 2 ;;
         --img-size)  IMG_SIZE="$2";        shift 2 ;;
         --clean)     CLEAN=true;           shift ;;
         --clean-only) CLEAN=true; CLEAN_EXIT=true; shift ;;
         --kernel-only) KERNEL_ONLY=true;   shift ;;
         --patches-ref) [ -n "$2" ] && PATCHES_REF="$2"; shift 2 ;;
+        --print-name) PRINT_NAME=true;      shift ;;
         -h|--help)   usage ;;
         *) echo "Unknown option: $1"; usage ;;
     esac
@@ -53,13 +59,56 @@ fi
 
 KERNEL_OUT="$SCRIPT_DIR/linux-bin"
 OUTPUT_DIR="$SCRIPT_DIR/output"
-CHROOT_DIR="$SCRIPT_DIR/work/chroot"
+CHROOT_DIR="$SCRIPT_DIR/work/chroot"   # may be overridden per edition below
 CACHE_DIR="$SCRIPT_DIR/work/cache"
 CCACHE_DIR="${CCACHE_DIR:-$SCRIPT_DIR/ccache}"
 LOG_FILE="$SCRIPT_DIR/build.log"
 DOCKER_NAME="ps5-build-$$"
 
+# --- Resolve the edition (variant) YAML and the image name -------------------
+# Each build is described by one YAML file in distros/<distro>/. The image name
+# comes from `image.name` inside that YAML, so every edition produces its own
+# ps5-<edition>.img, its own archives and its own release.
+[ -n "$VARIANT" ] || VARIANT="image"
 
+if [ "$DISTRO" = "all" ]; then
+    VARIANT="all"
+    IMAGE_YAML=""
+    IMG_NAME="ps5-multi"
+else
+    DISTRO_DIR="$SCRIPT_DIR/distros/$DISTRO"
+    [ -d "$DISTRO_DIR" ] || { echo "Unknown distro: $DISTRO (no $DISTRO_DIR)"; exit 1; }
+    IMAGE_YAML="$DISTRO_DIR/$VARIANT.yaml"
+    if [ ! -f "$IMAGE_YAML" ]; then
+        echo "Unknown edition '$VARIANT' for $DISTRO. Available editions:"
+        for f in "$DISTRO_DIR"/*.yaml; do
+            [ -f "$f" ] && echo "  $(basename "$f" .yaml)"
+        done
+        exit 1
+    fi
+    IMG_NAME=$(awk '
+        /^image:/            { in_image = 1; next }
+        /^[^[:space:]#]/     { in_image = 0 }
+        in_image && $1 == "name:" { print $2; exit }
+    ' "$IMAGE_YAML" | tr -d "\"'")
+    if [ -z "$IMG_NAME" ]; then
+        if [ "$VARIANT" = "image" ]; then
+            IMG_NAME="ps5-${DISTRO}"
+        else
+            IMG_NAME="ps5-${DISTRO}-${VARIANT}"
+        fi
+    fi
+    IMG_NAME=$(printf '%s' "$IMG_NAME" | tr -c 'A-Za-z0-9._-' '-')
+    # One chroot cache per edition; the base edition keeps work/chroot.
+    CHROOT_KEY="$DISTRO"
+    [ "$VARIANT" = "image" ] || CHROOT_KEY="${DISTRO}-${VARIANT}"
+    CHROOT_DIR="$SCRIPT_DIR/work/chroot-${CHROOT_KEY}"
+fi
+
+if [ "$PRINT_NAME" = true ]; then
+    echo "$IMG_NAME"
+    exit 0
+fi
 
 if [ "$DISTRO" = "all" ] && [ "$IMG_SIZE" = "12000" ]; then
     IMG_SIZE=32000
@@ -154,6 +203,11 @@ if [ "$KERNEL_ONLY" = true ]; then
 else
     echo "  Distro:       $DISTRO"
     [ "$DISTRO" = "all" ] && echo "                ($MULTI_DISTROS)"
+    echo "  Edition:      $VARIANT"
+    echo "  Image name:   $IMG_NAME"
+    if [ -n "$IMAGE_YAML" ]; then
+        echo "  YAML:         ${IMAGE_YAML#"$SCRIPT_DIR"/}"
+    fi
     echo "  Image size:   ${IMG_SIZE}MB"
 fi
 if [ -f "$PATCHES_DIR/.config" ]; then
@@ -413,11 +467,13 @@ else
             -v "$CHROOT_DIR":/build/chroot \
             -v "$CACHE_DIR":/build/cache \
             -e DISTRO="$DISTRO" \
+            -e IMAGE_YAML="/repo/distros/${DISTRO}/${VARIANT}.yaml" \
+            -e IMG_NAME="$IMG_NAME" \
             -e IMG_SIZE="$IMG_SIZE" \
             -e SKIP_CHROOT="$SKIP_CHROOT" \
             "$BUILDER_IMAGE"
 
-    IMG_PATH="$OUTPUT_DIR/ps5-${DISTRO}.img"
+    IMG_PATH="$OUTPUT_DIR/${IMG_NAME}.img"
 fi
 
 echo ""

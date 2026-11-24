@@ -1,5 +1,6 @@
 name: Build Image
-run-name: Build Image (${{ inputs.distro || 'fedora' }})
+run-name: >-
+  Build Image (${{ inputs.distro || 'fedora' }}${{ inputs.variant && format(' · {0}', inputs.variant) || ' · all editions' }})
 
 on:
   workflow_dispatch:
@@ -9,37 +10,119 @@ on:
         default: 'fedora'
         type: choice
         options: [fedora]
+      variant:
+        description: 'Edition YAML (stem of distros/<distro>/<name>.yaml). Empty = build every edition.'
+        default: ''
+        type: string
   workflow_call:
     inputs:
       distro:
+        description: 'Distribution'
         type: string
         default: 'fedora'
+      variant:
+        description: 'Edition YAML stem. Empty = build every edition.'
+        type: string
+        default: ''
+
+env:
+  DISTRO: ${{ inputs.distro || 'fedora' }}
+  # Number of dated releases kept per edition (the newest ones win).
+  KEEP_RELEASES: '5'
 
 jobs:
-  matrix:
+  # List every edition YAML (distros/<distro>/*.yaml) so that adding a new
+  # edition file is all it takes to get a new build, archives and release.
+  editions:
     runs-on: ubuntu-latest
     outputs:
-      distros: ${{ steps.set.outputs.distros }}
+      list: ${{ steps.list.outputs.list }}
     steps:
-      - id: set
+      - name: Checkout image builder
+        uses: actions/checkout@v6
+        with:
+          path: image
+
+      - name: List editions
+        id: list
+        shell: bash
+        env:
+          ONLY: ${{ inputs.variant || '' }}
         run: |
-          echo 'distros=["fedora"]' >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          dir="image/distros/${DISTRO}"
+          [ -d "$dir" ] || { echo "::error::No edition directory: $dir"; exit 1; }
+          mapfile -t all < <(find "$dir" -maxdepth 1 -type f -name '*.yaml' -printf '%f\n' \
+            | sed 's/\.yaml$//' | sort)
+          [ ${#all[@]} -gt 0 ] || { echo "::error::No *.yaml editions in $dir"; exit 1; }
+
+          if [ -n "$ONLY" ]; then
+            selected=()
+            for edition in "${all[@]}"; do
+              [ "$edition" = "$ONLY" ] && selected+=("$edition")
+            done
+            [ ${#selected[@]} -gt 0 ] || {
+              echo "::error::Unknown edition '$ONLY'. Available: ${all[*]}"
+              exit 1
+            }
+          else
+            selected=("${all[@]}")
+          fi
+
+          json=$(printf '%s\n' "${selected[@]}" | jq -R . | jq -sc .)
+          echo "list=$json" >> "$GITHUB_OUTPUT"
+          echo "Editions to build: $json"
+
+  # The kernel is identical for every edition: compile it once, then feed the
+  # package to each image build (build_image.sh skips the kernel stage when
+  # linux-bin/*.rpm is already there).
+  kernel:
+    needs: editions
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    outputs:
+      kver: ${{ steps.info.outputs.kver }}
+      psha: ${{ steps.info.outputs.psha }}
+    steps:
+      - name: Checkout image builder
+        uses: actions/checkout@v6
+        with:
+          path: image
+
+      - name: Build PS5 kernel package (.rpm)
+        run: bash image/build_image.sh --distro "${DISTRO}" --variant image --kernel-only
+
+      - name: Collect kernel version info
+        id: info
+        shell: bash
+        run: |
+          kver=$(cat image/linux-bin/VERSION 2>/dev/null || echo unknown)
+          psha=$(git -C image/work/ps5-linux-patches rev-parse --short HEAD 2>/dev/null || echo unknown)
+          echo "kver=$kver" >> "$GITHUB_OUTPUT"
+          echo "psha=$psha" >> "$GITHUB_OUTPUT"
+
+      - name: Upload kernel package
+        uses: actions/upload-artifact@v6
+        with:
+          name: kernel-rpm
+          path: image/linux-bin/
+          retention-days: 7
+          if-no-files-found: error
 
   build:
-    needs: matrix
+    needs: [editions, kernel]
     runs-on: ubuntu-latest
     timeout-minutes: 360
     concurrency:
-      group: ps5-image-${{ matrix.distro }}
+      group: ps5-image-${{ matrix.edition }}
       cancel-in-progress: false
     permissions:
-      contents: write
-
+      contents: read
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: ${{ fromJson(needs.matrix.outputs.distros) }}
+        edition: ${{ fromJson(needs.editions.outputs.list) }}
 
     steps:
       - name: Checkout image builder
@@ -47,145 +130,186 @@ jobs:
         with:
           path: image
 
-      - name: Build ${{ matrix.distro }} image
-        run: |
-          bash image/build_image.sh --distro "${{ matrix.distro }}"
+      - name: Fetch kernel package
+        uses: actions/download-artifact@v6
+        with:
+          name: kernel-rpm
+          path: image/linux-bin
 
-      - name: Set version info
-        id: version
-        run: |
-          psha=$(git -C image/work/ps5-linux-patches rev-parse --short HEAD 2>/dev/null || echo "unknown")
-          kver=$(cat image/linux-bin/VERSION 2>/dev/null || echo "unknown")
-          ts=$(date -u +%Y%m%d-%H%M%S)
-          echo "psha=$psha" >> "$GITHUB_OUTPUT"
-          echo "kver=$kver" >> "$GITHUB_OUTPUT"
-          echo "ts=$ts" >> "$GITHUB_OUTPUT"
+      - name: Build ${{ matrix.edition }} image
+        run: bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}"
 
       - name: Report
+        shell: bash
         run: |
-          ls -lh image/output/*.img
-          sha256sum image/output/*.img
+          set -euo pipefail
+          img=$(bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}" --print-name)
+          test -f "image/output/${img}.img"
+          ls -lh "image/output/${img}.img"
+          sha256sum "image/output/${img}.img"
 
       - name: Compress and split image into 1.5GB parts (7z)
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update && sudo apt-get install -y p7zip-full
-          # On compresse et découpe l'image brute en volumes de 1500 Mo (1.5GB) pour éviter la limite des 2Go de GitHub
-          7z a -t7z -mx=4 -v1500m image/output/ps5-${{ matrix.distro }}.img.7z image/output/ps5-${{ matrix.distro }}.img
+          img=$(bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}" --print-name)
+          # 1.5 GiB volumes keep each archive under GitHub's 2 GiB file limit.
+          7z a -t7z -mx=4 -v1500m "image/output/${img}.img.7z" "image/output/${img}.img"
 
       - name: Save build metadata
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p meta
-          sha256sum image/output/ps5-${{ matrix.distro }}.img.7z.* \
-            | sed 's|image/output/||' > meta/${{ matrix.distro }}.sha256
-          echo "${{ steps.version.outputs.kver }}" > meta/kver
-          echo "${{ steps.version.outputs.psha }}" > meta/psha
-          echo "${{ steps.version.outputs.ts }}" > meta/ts
+          img=$(bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}" --print-name)
+          sha256sum image/output/*.img.7z.* | sed 's|image/output/||' > "meta/${img}.sha256"
+          echo "$img" > meta/img_name
+          echo "${{ matrix.edition }}" > meta/edition
+          echo "${{ needs.kernel.outputs.kver }}" > meta/kver
+          echo "${{ needs.kernel.outputs.psha }}" > meta/psha
+          date -u +%Y%m%d-%H%M%S > meta/ts
+          sed -n 's/^  description:[[:space:]]*//p' "image/distros/${DISTRO}/${{ matrix.edition }}.yaml" \
+            | head -1 | sed 's/^"//; s/"$//' > meta/description
 
       - name: Upload build metadata
         uses: actions/upload-artifact@v6
         with:
-          name: meta-${{ matrix.distro }}
+          name: meta-${{ matrix.edition }}
           path: meta/
           retention-days: 1
 
-      - name: Upload Fedora image parts artifact
+      - name: Upload image parts artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ps5-${{ matrix.distro }}-img
-          path: image/output/ps5-${{ matrix.distro }}.img.7z.*
+          name: ps5-${{ matrix.edition }}-img
+          path: image/output/*.img.7z.*
           retention-days: 7
+          if-no-files-found: error
 
+  # One dated release per edition. Old releases are never overwritten: each
+  # build publishes under its own tag (<image>-<UTC date>-<time>) and only the
+  # releases beyond KEEP_RELEASES oldest ones are removed.
   release:
-    needs: build
+    needs: [editions, build]
     runs-on: ubuntu-latest
     concurrency:
-      group: ps5-image-release
+      group: ps5-image-release-${{ matrix.edition }}
       cancel-in-progress: false
-    if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+    if: ${{ !cancelled() && needs.editions.result == 'success' }}
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        edition: ${{ fromJson(needs.editions.outputs.list) }}
+
     steps:
       - name: Download build metadata
+        continue-on-error: true
         uses: actions/download-artifact@v6
         with:
-          pattern: meta-*
+          name: meta-${{ matrix.edition }}
           path: meta
-          merge-multiple: true
 
       - name: Download built image parts
+        continue-on-error: true
         uses: actions/download-artifact@v6
         with:
-          name: ps5-fedora-img
+          name: ps5-${{ matrix.edition }}-img
           path: output
 
+      - name: Check build output
+        id: check
+        shell: bash
+        run: |
+          if [ -f meta/img_name ] && ls output/*.7z.* >/dev/null 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No build output for edition ${{ matrix.edition }}; skipping its release."
+          fi
+
+      - name: Compute release tag
+        id: info
+        if: steps.check.outputs.ok == 'true'
+        shell: bash
+        run: |
+          img=$(cat meta/img_name)
+          date_utc=$(date -u +%Y.%m.%d-%H%M)
+          echo "img=$img" >> "$GITHUB_OUTPUT"
+          echo "date=$date_utc" >> "$GITHUB_OUTPUT"
+          echo "tag=${img}-${date_utc}" >> "$GITHUB_OUTPUT"
+          echo "title=${img} (${date_utc})" >> "$GITHUB_OUTPUT"
+
       - name: Prepare release body
-        id: body
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
+        if: steps.check.outputs.ok == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          img=$(cat meta/img_name)
+          edition=$(cat meta/edition)
+          kver=$(cat meta/kver)
+          psha=$(cat meta/psha)
+          ts=$(cat meta/ts)
+          {
+            printf 'PS5 Linux image `%s` (edition `%s`).\n\n' "$img" "$edition"
+            if [ -s meta/description ]; then printf '%s\n\n' "$(cat meta/description)"; fi
+            printf 'Kernel: `%s`\n' "$kver"
+            printf 'Patches: [`%s`](https://github.com/ps5-linux/ps5-linux-patches/commit/%s)\n' "$psha" "$psha"
+            printf 'Built: `%s`\n\n' "$ts"
+            printf '**Archives** (7z split into 1.5 GiB volumes — download every part, then extract `*.001`):\n\n'
+            for f in output/*.7z.*; do printf -- '- `%s`\n' "$(basename "$f")"; done
+            printf '\n**SHA256 checksums:**\n```\n'
+            cat "meta/${img}.sha256"
+            printf '```\n'
+          } > body.md
+          cat body.md
 
-            const kver = fs.readFileSync('meta/kver', 'utf8').trim();
-            const psha = fs.readFileSync('meta/psha', 'utf8').trim();
-            const ts   = fs.readFileSync('meta/ts',   'utf8').trim();
-
-            const sumLine = fs.readFileSync(path.join('meta', 'fedora.sha256'), 'utf8').trim();
-
-            const body = [
-              'PS5 Linux Fedora 45 FR image — built from latest `main` (Split into 1.5GB parts).',
-              '',
-              `Kernel: \`${kver}\``,
-              `Patches: [\`${psha}\`](https://github.com/ps5-linux/ps5-linux-patches/commit/${psha})`,
-              `Built: \`${ts}\``,
-              '',
-              '**SHA256 checksums:**',
-              '```',
-              sumLine,
-              '```',
-            ].join('\n');
-
-            core.setOutput('text', body);
-
-      - name: Move latest tag to current commit
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const ref = 'tags/latest';
-            try {
-              await github.rest.git.updateRef({
-                ...context.repo, ref, sha: context.sha, force: true,
-              });
-            } catch (e) {
-              if (e.status !== 422) throw e;
-              await github.rest.git.createRef({
-                ...context.repo, ref: 'refs/tags/latest', sha: context.sha,
-              });
-            }
-
-      - name: Create or update release
+      - name: Create release
+        if: steps.check.outputs.ok == 'true'
         uses: softprops/action-gh-release@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: latest
-          name: PS5 Linux Fedora 45 FR (latest)
-          body: ${{ steps.body.outputs.text }}
-          files: output/ps5-fedora.img.7z.*
-          make_latest: true
-          overwrite_files: true
+          tag_name: ${{ steps.info.outputs.tag }}
+          name: ${{ steps.info.outputs.title }}
+          body_path: body.md
+          files: output/*.7z.*
+          fail_on_unmatched_files: true
+          # Only the base edition (distros/<distro>/image.yaml) owns the
+          # "Latest" badge, so parallel release jobs never fight over it.
+          make_latest: ${{ matrix.edition == 'image' && 'true' || 'false' }}
 
-      - name: Refresh release publish date
+      - name: Prune old releases
+        if: steps.check.outputs.ok == 'true'
         uses: actions/github-script@v8
+        env:
+          IMG_NAME: ${{ steps.info.outputs.img }}
+          KEEP: ${{ env.KEEP_RELEASES }}
         with:
           script: |
-            const { data: rel } = await github.rest.repos.getReleaseByTag({
-              ...context.repo, tag: 'latest',
+            const keep = Number(process.env.KEEP || 5);
+            const img = process.env.IMG_NAME;
+            const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Only this edition's dated tags: <image>-YYYY.MM.DD-HHMM
+            const re = new RegExp(`^${escape(img)}-\\d{4}\\.\\d{2}\\.\\d{2}-\\d{4}$`);
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              ...context.repo,
+              per_page: 100,
             });
-            await github.rest.repos.updateRelease({
-              ...context.repo, release_id: rel.id, draft: true,
-            });
-            await github.rest.repos.updateRelease({
-              ...context.repo, release_id: rel.id, draft: false, make_latest: 'true',
-            });
-            core.info(`re-published release ${rel.id}`);
-            
+            const mine = releases
+              .filter((rel) => re.test(rel.tag_name))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            core.info(`${img}: ${mine.length} dated release(s), keeping the newest ${keep}`);
+            for (const rel of mine.slice(keep)) {
+              core.info(`deleting old release ${rel.tag_name} (${rel.created_at})`);
+              await github.rest.repos.deleteRelease({ ...context.repo, release_id: rel.id });
+              try {
+                await github.rest.git.deleteRef({ ...context.repo, ref: `tags/${rel.tag_name}` });
+              } catch (e) {
+                if (e.status !== 404 && e.status !== 422) throw e;
+              }
+            }

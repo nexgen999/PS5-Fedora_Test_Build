@@ -1,0 +1,240 @@
+image:
+  name: ps5-fedora-minimal_setup
+  distribution: fedora
+  release: "45"
+  description: Fedora minimal CLI setup for PS5 - no desktop session (SSH, NetworkManager, kernel + hardware tooling)
+  architecture: x86_64
+
+source:
+  downloader: fedora-http
+  url: https://kojipkgs.fedoraproject.org
+  skip_verification: true
+
+packages:
+  manager: dnf
+  update: true
+  cleanup: true
+
+  sets:
+    - packages:
+        # Networking & remote access
+        - NetworkManager
+        - NetworkManager-wifi
+        - wpa_supplicant
+        - iw
+        - wireless-regdb
+        - linux-firmware
+        - avahi
+        - openssh-server
+        - bind-utils
+        - nmap-ncat
+
+        # Base system & tools
+        - bash-completion
+        - sudo
+        - nano
+        - util-linux
+        - pciutils
+        - usbutils
+        - curl
+        - wget
+        - dnf-plugins-core
+        - dracut
+        - kmod
+        - e2fsprogs
+        - parted
+        - cloud-utils-growpart
+        - kexec-tools
+        - zram-generator-defaults
+        - tar
+        - xz
+
+        # Toolchain used to compile ps5-linux-tools (fan/boost control)
+        - git
+        - make
+        - gcc
+        - binutils
+        - pkgconf
+
+        # Localization
+        - glibc-all-langpacks
+        - langpacks-fr
+        - langpacks-en
+        - xkeyboard-config
+
+        # Console fonts
+        - dejavu-sans-fonts
+        - fontconfig
+      action: install
+
+files:
+  - path: /etc/hostname
+    generator: hostname
+
+  - path: /etc/hosts
+    generator: hosts
+
+  - path: /etc/machine-id
+    generator: dump
+
+  - path: /etc/kernel/postinst.d/zz-update-boot
+    generator: copy
+    source: /tmp/build-staging/zz-update-boot
+    mode: "0755"
+
+  - path: /etc/fstab
+    generator: copy
+    source: /tmp/build-staging/fstab
+
+  - path: /usr/local/sbin/grow-rootfs
+    generator: copy
+    source: /tmp/build-staging/grow-rootfs
+    mode: "0755"
+
+  - path: /etc/systemd/system/grow-rootfs.service
+    generator: copy
+    source: /tmp/build-staging/grow-rootfs.service
+
+  - path: /opt/rpms/
+    generator: copy
+    source: /tmp/build-staging/rpms
+
+actions:
+  - trigger: post-unpack
+    action: |-
+      #!/bin/bash
+      set -eux
+      echo "retries=10" >> /etc/dnf/dnf.conf
+      echo "%_install_langs fr,en" > /etc/rpm/macros.image-language-conf
+      dnf makecache || true
+
+  - trigger: post-update
+    action: |-
+      #!/bin/bash
+      set -eux
+      passwd -l root
+
+  - trigger: post-packages
+    action: |-
+      #!/bin/bash
+      set -eux
+
+      # SSH & base services
+      sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/'                /etc/ssh/sshd_config
+      sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+      systemctl enable sshd
+      systemctl enable NetworkManager
+      systemctl enable avahi-daemon
+      systemctl set-default multi-user.target
+
+      # --- Compilation et installation manuelle de ps5-linux-tools ---
+      git clone https://github.com/ps5-linux/ps5-linux-tools /tmp/ps5-linux-tools
+      cd /tmp/ps5-linux-tools
+      make
+      install -m 0755 ps5_control /usr/local/sbin/ps5_control
+      cd /
+      rm -rf /tmp/ps5-linux-tools
+
+      # Firmware AMD PS5 non compressé
+      cd /usr/lib/firmware/amdgpu
+      for f in cyan_skillfish*.xz; do
+          if [ -L "$f" ]; then
+              tgt=$(readlink -f "$f")
+              rm "$f"
+              xz -dc "$tgt" > "${f%.xz}"
+          fi
+      done
+      unxz cyan_skillfish*.xz
+
+  - trigger: post-files
+    action: |-
+      #!/bin/bash
+      set -eux
+      systemctl enable grow-rootfs.service
+
+      mkdir -p /etc/selinux
+      if [ -f /etc/selinux/config ]; then
+          sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+      else
+          printf 'SELINUX=disabled\nSELINUXTYPE=targeted\n' > /etc/selinux/config
+      fi
+
+      # --- Default user ---
+      useradd -m -G wheel,video,input,render -s /bin/bash ps5
+      echo "ps5:ps5" | chpasswd
+      echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel
+      chown -R ps5:ps5 /home/ps5
+
+      # zram swap
+      printf '[zram0]\nzram-size = ram / 2\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf
+
+      # --- Service systemd automatique pour Fan ON et Boost ON ---
+      cat > /etc/systemd/system/ps5-performance.service <<'EOF'
+      [Unit]
+      Description=PS5 Fan Control and Boost Mode
+      After=multi-user.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/ps5_control --fan on
+      ExecStartPost=/usr/local/sbin/ps5_control --boost on
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      systemctl enable ps5-performance.service
+
+      # --- Install custom kernel rpm ---
+      mkdir -p /boot/efi
+      rpm -ivh --nosignature --replacefiles /opt/rpms/*.rpm
+      rm -rf /opt/rpms
+      KVER=$(ls -1t /lib/modules | head -1)
+
+      # --- PS5 internal WiFi ---
+      rm -f /etc/modules-load.d/moal
+      install -d /usr/local/sbin /etc/systemd/system /etc/modprobe.d
+      cat > /etc/modprobe.d/ps5-iw620-noautoload.conf <<'EOF'
+      blacklist moal
+      blacklist mlan
+      EOF
+      cat > /usr/local/sbin/ps5-iw620-load <<'EOF'
+      #!/bin/sh
+      set -eu
+      FW_NAME=nxp/pcieuartiw620_combo_v1.bin
+      FW_DST=/lib/firmware/$FW_NAME
+      FW_SRC=
+      for candidate in "/boot/efi/lib/$FW_NAME" "/boot/lib/$FW_NAME" "$FW_DST"; do
+        [ -f "$candidate" ] && { FW_SRC="$candidate"; break; }
+      done
+      [ -z "$FW_SRC" ] && FW_SRC="$(find /boot /boot/efi -path "*/$FW_NAME" -type f 2>/dev/null | head -n 1)"
+      [ -n "$FW_SRC" ] && [ -f "$FW_SRC" ] && install -D -0644 "$FW_SRC" "$FW_DST"
+      [ -f "$FW_DST" ] || exit 0
+      if [ -d /sys/module/moal ] && [ ! -e /sys/bus/pci/drivers/wlan_pcie/0000:40:00.7 ]; then
+        modprobe -r moal mlan 2>/dev/null || true
+      fi
+      modprobe cfg80211 || true
+      modprobe moal
+      rfkill unblock all 2>/dev/null || true
+      nmcli radio wifi on 2>/dev/null || true
+      EOF
+      chmod 0755 /usr/local/sbin/ps5-iw620-load
+      cat > /etc/systemd/system/ps5-iw620.service <<'EOF'
+      [Unit]
+      Description=Load PS5 IW620 internal WiFi
+      RequiresMountsFor=/boot/efi
+      Wants=systemd-udev-settle.service
+      After=local-fs.target systemd-udev-settle.service
+      Before=NetworkManager.service network-pre.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/ps5-iw620-load
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      depmod -a "$KVER"
+      /etc/kernel/postinst.d/zz-update-boot "$KVER" "/boot/vmlinuz-$KVER" || true
+      systemctl enable ps5-iw620.service

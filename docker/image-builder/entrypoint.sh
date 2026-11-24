@@ -8,7 +8,11 @@ STAGING="/tmp/build-staging"
 ROOT_LABEL="${DISTRO}"
 EFI_LABEL="boot"
 CHROOT="/build/chroot"
-IMG="/output/ps5-${DISTRO}.img"
+# The edition YAML and the image name are resolved by build_image.sh; fall back
+# to the historical single-image paths when the container is run directly.
+IMAGE_YAML="${IMAGE_YAML:-/repo/distros/${DISTRO}/image.yaml}"
+IMG_NAME="${IMG_NAME:-ps5-${DISTRO}}"
+IMG="/output/${IMG_NAME}.img"
 
 # Detect kernel version from the staged kernel package (used by bazzite +
 # batocera rootfs builders which install the linux-ps5 kernel manually).
@@ -110,7 +114,8 @@ EOF
     # --- Build rootfs ---
     rm -rf "$CHROOT"/* "$CHROOT"/.[!.]* 2>/dev/null || true
 
-    YAML="/repo/distros/${DISTRO}/image.yaml"
+    YAML="$IMAGE_YAML"
+    [ -f "$YAML" ] || { echo "FATAL: edition YAML not found: $YAML"; exit 1; }
     distrobuilder build-dir "$YAML" "$CHROOT" --with-post-files --cache-dir /build/cache --cleanup=false
 fi
 
@@ -124,7 +129,7 @@ esac
 
 # --- Create GPT disk image ---
 echo "=== Creating ${IMG_SIZE}MB disk image ==="
-TMPIMG="/output/.ps5-${DISTRO}.img.tmp"
+TMPIMG="/output/.${IMG_NAME}.img.tmp"
 rm -f "$TMPIMG"
 truncate -s "${IMG_SIZE}M" "$TMPIMG"
 sync

@@ -7,3 +7,5 @@ build.log
 
 *.swp
 patches.diff
+__pycache__/
+*.pyc

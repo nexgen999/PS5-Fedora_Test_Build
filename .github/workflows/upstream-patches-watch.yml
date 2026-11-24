@@ -67,6 +67,6 @@ jobs:
             // the matrix build directly.
             await github.rest.actions.createWorkflowDispatch({
               owner, repo, workflow_id: 'build-image.yml', ref: 'main',
-              inputs: { distro: 'all' },
+              inputs: { distro: 'fedora', variant: '' },
             });
-            core.info('dispatched build-image.yml distro=all');
+            core.info('dispatched build-image.yml distro=fedora (all editions)');

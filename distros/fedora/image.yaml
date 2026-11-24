@@ -287,6 +287,8 @@ actions:
     action: |-
       #!/bin/bash
       set -eux
+
+      # --- Rafraîchissement des fontes ---
       fc-cache -f 2>/dev/null || true
 
       # --- Activation globale de bash-completion pour les sessions Bash ---
@@ -310,6 +312,7 @@ actions:
       # --- Steam pilotes graphiques 32 bits ---
       dnf install -y mesa-vulkan-drivers.i686 mesa-dri-drivers.i686 libva.i686 || true
 
+      # --- Flathub ---
       flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
 
       # --- Installation de Balena Etcher uniquement ---
@@ -329,12 +332,14 @@ actions:
       cd /
       rm -rf /tmp/ps5-linux-tools
 
-      # SSH & Services de base (cups activé par défaut sur cette build de test)
+      # --- SSH & Services de base ---
       sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/'                /etc/ssh/sshd_config
       sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
       systemctl enable sshd
       systemctl enable NetworkManager
       systemctl enable avahi-daemon
+
+      # --- Session graphique (GDM, CUPS, Bluetooth) ---
       systemctl enable cups
       systemctl enable gdm
       systemctl enable bluetooth.service
@@ -355,8 +360,11 @@ actions:
     action: |-
       #!/bin/bash
       set -eux
+
+      # --- grow-rootfs ---
       systemctl enable grow-rootfs.service
 
+      # --- SELinux désactivé ---
       mkdir -p /etc/selinux
       if [ -f /etc/selinux/config ]; then
           sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
@@ -364,11 +372,12 @@ actions:
           printf 'SELINUX=disabled\nSELINUXTYPE=targeted\n' > /etc/selinux/config
       fi
 
-      # --- Default user + GDM autologin ---
+      # --- Utilisateur par défaut (ps5/ps5, sudo) ---
       useradd -m -G wheel,video,input,render -s /bin/bash ps5
       echo "ps5:ps5" | chpasswd
       echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel
 
+      # --- Autologin GDM ---
       mkdir -p /etc/gdm
       cat > /etc/gdm/custom.conf <<'EOF'
       [daemon]
@@ -424,7 +433,7 @@ actions:
       chmod 600 /home/ps5/.local/share/keyrings/login.keyring /home/ps5/.local/share/keyrings/default
       chown -R ps5:ps5 /home/ps5/.local
 
-      # zram swap
+      # --- zram swap ---
       printf '[zram0]\nzram-size = ram / 2\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf
 
       # --- Installation Decky Loader ---
