@@ -217,22 +217,24 @@ reference build.
 `run-ci`-labelled pull request.
 
 ```
-editions ──► kernel ──► build (matrix, every edition in parallel) ──► release (matrix)
+editions ──► kernel ──► build (matrix) ──► publish ──► release (matrix, upload) ──► release-prune
 ```
 
 | Job | Role |
 |---|---|
-| `editions` | lists `distros/fedora/*.yaml` (or only `variant` when given) and builds the matrix |
+| `editions` | lists `distros/fedora/*.yaml`, applies the form selection (`all_editions`, ticked boxes, `variant`, `skip_editions`) and builds the matrix |
 | `kernel` | compiles the kernel **once**, copies the `.rpm` into `kernel-pkg/` and uploads the `kernel-rpm` artifact |
 | `build` | per edition: download the `.rpm`, run `build_image.sh --variant <edition>`, verify the image, split it into 1.5 GiB 7z volumes (`7z -mx=4 -v1500m`) |
-| `release` | publishes one release per edition with checksums, then prunes old ones |
+| `publish` | creates **one** dated release for the run, notes assembled from the `meta-*` artifacts |
+| `release` | one entry per edition: adds its volumes to the shared release (`gh release upload`) |
+| `release-prune` | prunes old dated releases (5 by default) |
 
-- Tag: `<image.name>-YYYY.MM.DD-HHMM` in UTC, e.g.
-  `ps5-fedora-gaming_edition-2026.11.24-1830`.
-- Nothing is overwritten: each build creates a new tag.
-- `KEEP_RELEASES: '5'` (in `build-image.yml`): only the 5 newest dated releases of each
-  edition are kept, older ones are deleted (release + tag). The *Latest* badge is only
-  set by the `image` edition.
+- Tag: `ps5-<distro>-images-YYYY.MM.DD-HHMMSS` in UTC, e.g.
+  `ps5-fedora-images-2026.11.24-020015`. There is **one release per run**, holding the
+  volumes of every edition built.
+- Nothing is overwritten: each run creates a new tag.
+- `KEEP_RELEASES: '5'` (in `build-image.yml`): only the 5 newest dated releases are kept,
+  older ones are deleted (release + tag). The *Latest* badge follows the newest release.
 - 7z volumes are 1.5 GiB to stay under GitHub's 2 GiB per-file limit.
 - The `kernel` job copies the `.rpm` into a runner-owned directory before uploading:
   `linux-bin/` also holds the root-owned `staging/` tree written by the container, which

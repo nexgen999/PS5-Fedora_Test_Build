@@ -41,8 +41,9 @@ en découlent presque toujours.
 | Artefact noyau en `EACCES` | upload de l'arbre `linux-bin/staging/` (fichiers root) | ne pas uploader `linux-bin/` : le workflow copie le `.rpm` dans `kernel-pkg/` |
 | `An error has occurred during zip creation for the artifact` | même cause : `upload-artifact` zippe des fichiers illisibles | conserver le motif `kernel-pkg/` |
 | Le job `kernel` ne recompile pas | cache valide (tag de patches et recettes inchangés) | comportement voulu ; pour forcer, supprimer le cache `kernel-rpm-…` dans Actions → Caches |
-| `No build output for edition X; skipping its release` | build en échec ou artefact absent | corriger le build ; la release des autres éditions n'est pas touchée |
-| Release refusée / tag déjà existant | deux runs très rapprochés sur la même édition | le groupe `concurrency` sérialise par édition ; relancer si besoin |
+| `No build output for edition X; skipping its release` | build en échec ou artefact absent | corriger le build ; la release du run contient les autres éditions |
+| `fatal error: zlib.h: No such file or directory` (étape `make` de ps5-linux-tools) | l'édition installe `ps5-linux-tools` sans les en-têtes zlib | ajouter `zlib-devel` au bloc toolchain (`m2_init.c` inclut `<zlib.h>`, le Makefile passe `-lz`) — corrigé pour `minimal_setup` |
+| Release refusée / tag déjà existant | deux runs dans la même seconde | le tag contient les secondes (`HHMMSS`) ; relancer |
 | Le run dure longtemps | 11 éditions à construire | le noyau est mis en cache ; les builds tournent en parallèle |
 
 ## YAML et éditeur graphique
@@ -87,5 +88,6 @@ free -h
 |---|---|---|
 | Extraction impossible | volume manquant | télécharger **tous** les `*.7z.00N` dans le même dossier puis `7z x …001` |
 | Checksum différent | téléchargement interrompu | comparer avec `meta/<image>.sha256` publié dans le corps de la release |
-| Ancienne release disparue | élagage automatique | `KEEP_RELEASES` = 5 par édition ; récupérer une version plus récente |
-| Pas de badge Latest sur une édition | voulu | seul `image` (base) porte le badge |
+| Ancienne release disparue | élagage automatique | `KEEP_RELEASES` = 5 releases (une par run) ; récupérer une version plus récente |
+| Release sans une édition | build en échec dans ce run | voir la section « Éditions non publiées » du corps de la release, puis le run lié |
+| Une release par édition dans l'ancien format | releases créées avant le passage à une release par run | elles ne sont pas élaguées ; les supprimer à la main une fois les nouvelles vérifiées |

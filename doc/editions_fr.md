@@ -1,9 +1,9 @@
 # Les builds Fedora — catalogue
 
 Chaque build est **un fichier YAML** dans `distros/fedora/`. Le workflow les découvre
-tout seul : ajouter un fichier suffit à obtenir une nouvelle image, ses archives et sa
-propre release. Le nom de l'image, des archives et du tag vient de `image.name` dans le
-YAML.
+tout seul : ajouter un fichier suffit à obtenir une nouvelle image et ses archives, et
+toutes les éditions construites par un run sont regroupées dans **une seule release**. Le
+nom de l'image et des archives vient de `image.name` dans le YAML.
 
 - Éditeur graphique pour cocher/décocher : [`editor_fr.md`](editor_fr.md)
 - Fonctionnement du builder : [`builder_fr.md`](builder_fr.md)
@@ -95,7 +95,7 @@ toolchain de développement. À choisir si la PS5 sert de console de jeu.
 ### Test — `fedora-test_build.yaml` → 194 paquets
 
 Copie complète de la base sous un autre nom, utilisée pour tester une modification sans
-toucher aux releases de `ps5-fedora` (qui garde le badge Latest).
+toucher à l'image ni aux archives de `ps5-fedora`.
 
 ## Famille Wayland alternative (137 paquets listés)
 
@@ -167,7 +167,8 @@ Idéale comme base serveur ou pour partir d'un système nu et ajouter ce qu'on v
 - Comptez ~30 Go libres : chaque édition garde son chroot dans
   `work/chroot-fedora-<édition>/`, plus l'image de 12 Go.
 - Via GitHub Actions, tout est construit automatiquement (voir [`ci_fr.md`](ci_fr.md)) ;
-  une édition peut être relancée seule avec l'entrée `variant`.
+  le formulaire *Run workflow* permet de cocher les éditions à construire, ou d'utiliser
+  `variant` / `skip_editions`.
 
 ## Modifier une édition
 
@@ -192,5 +193,5 @@ ne touche que `tools/**`, `**.md` ou `.gitignore`).
   exposée au réseau.
 - Toutes les sessions sont Wayland ; une application qui exige un serveur X11 complet ne
   fonctionnera pas (XWayland couvre la majorité des cas).
-- Les anciennes releases sont élaguées à 5 par édition (`KEEP_RELEASES`), et les
+- Les anciennes releases sont élaguées à 5 (`KEEP_RELEASES`, une release par run), et les
   artefacts CI expirent après 7 jours.

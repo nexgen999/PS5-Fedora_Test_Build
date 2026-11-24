@@ -43,5 +43,5 @@ Index des documents du dépôt. Chaque sujet existe en français et en anglais.
 - Le nom d'image (`image.name`) détermine le `.img`, les archives et le préfixe du tag.
 - Les commits qui ne touchent que `tools/**`, `**.md` ou `.gitignore` ne déclenchent pas
   de build.
-- Les anciennes releases sont conservées à 5 par édition ; les artefacts CI expirent en
-  7 jours.
+- Une release par build (toutes les éditions construites dedans) ; les 5 plus récentes
+  sont conservées et les artefacts CI expirent en 7 jours.

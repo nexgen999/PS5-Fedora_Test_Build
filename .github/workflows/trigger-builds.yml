@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     # L'outil d'édition, le comparatif et la doc ne changent pas l'image :
-    # inutile de relancer 6 builds (plusieurs heures) pour eux.
+    # inutile de relancer toutes les éditions (plusieurs heures) pour eux.
     paths-ignore:
       - 'tools/**'
       - '**.md'
@@ -22,5 +22,7 @@ jobs:
     uses: ./.github/workflows/build-image.yml
     with:
       distro: fedora
-      # Empty = build every edition found in distros/fedora/*.yaml
+      # Empty variant + all_editions = build every edition found in
+      # distros/fedora/*.yaml.
+      all_editions: true
       variant: ''

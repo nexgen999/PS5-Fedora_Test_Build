@@ -219,22 +219,25 @@ push vers `main` (sauf `tools/**`, `**.md`, `.gitignore`), sur lancement manuel,
 sur une PR étiquetée `run-ci`.
 
 ```
-editions ──► kernel ──► build (matrice, toutes les éditions en parallèle) ──► release (matrice)
+editions ──► kernel ──► build (matrice) ──► publish ──► release (matrice, upload) ──► release-prune
 ```
 
 | Job | Rôle |
 |---|---|
-| `editions` | liste `distros/fedora/*.yaml` (ou seulement `variant` si fourni) et produit la matrice |
+| `editions` | liste `distros/fedora/*.yaml`, applique la sélection du formulaire (`all_editions`, cases cochées, `variant`, `skip_editions`) et produit la matrice |
 | `kernel` | compile le noyau **une fois**, copie le `.rpm` dans `kernel-pkg/` et publie l'artefact `kernel-rpm` |
 | `build` | pour chaque édition : télécharge le `.rpm`, lance `build_image.sh --variant <edition>`, vérifie l'image, compresse en volumes 7z de 1,5 Gio (`7z -mx=4 -v1500m`) |
-| `release` | publie une release par édition, avec checksums, et élague les anciennes |
+| `publish` | crée **une** release datée pour le run, notes assemblées depuis les artefacts `meta-*` |
+| `release` | une entrée par édition : ajoute ses volumes à la release commune (`gh release upload`) |
+| `release-prune` | élague les vieilles releases datées (5 par défaut) |
 
-- Tag : `<image.name>-AAAA.MM.JJ-HHMM` en UTC, par exemple
-  `ps5-fedora-gaming_edition-2026.11.24-1830`.
-- Rien n'est écrasé : chaque build crée un nouveau tag.
+- Tag : `ps5-<distro>-images-AAAA.MM.JJ-HHMMSS` en UTC, par exemple
+  `ps5-fedora-images-2026.11.24-020015`. Il n'y a **qu'une release par run**, tous les
+  volumes des éditions construites y sont regroupés.
+- Rien n'est écrasé : chaque run crée un nouveau tag.
 - `KEEP_RELEASES: '5'` (dans `build-image.yml`) : seules les 5 releases datées les plus
-  récentes de chaque édition sont gardées, les suivantes sont supprimées (release +
-  tag). Le badge *Latest* n'est posé que par l'édition `image`.
+  récentes sont gardées, les suivantes sont supprimées (release + tag). Le badge *Latest*
+  suit la release la plus récente.
 - Les volumes 7z font 1,5 Gio pour rester sous la limite de 2 Gio par fichier GitHub.
 - Le job `kernel` copie le `.rpm` dans un dossier appartenant au runner avant l'upload :
   `linux-bin/` contient aussi l'arbre `staging/` écrit en root par le conteneur, que

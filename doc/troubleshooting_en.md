@@ -41,8 +41,9 @@ almost always consequences.
 | Kernel artifact `EACCES` | uploading the `linux-bin/staging/` tree (root-owned files) | never upload `linux-bin/`: the workflow copies the `.rpm` to `kernel-pkg/` |
 | `An error has occurred during zip creation for the artifact` | same cause: `upload-artifact` zips unreadable files | keep the `kernel-pkg/` path |
 | The `kernel` job does not recompile | valid cache (same patches tag and recipes) | intended; to force it, delete the `kernel-rpm-…` cache in Actions → Caches |
-| `No build output for edition X; skipping its release` | failed build or missing artifact | fix the build; other editions' releases are unaffected |
-| Release rejected / tag already exists | two runs very close on the same edition | the `concurrency` group serialises per edition; rerun if needed |
+| `No build output for edition X; skipping its release` | failed build or missing artifact | fix the build; the run's release still contains the other editions |
+| `fatal error: zlib.h: No such file or directory` (ps5-linux-tools `make` step) | the edition installs `ps5-linux-tools` without the zlib headers | add `zlib-devel` to the toolchain block (`m2_init.c` includes `<zlib.h>`, the Makefile links `-lz`) — fixed for `minimal_setup` |
+| Release rejected / tag already exists | two runs within the same second | the tag carries seconds (`HHMMSS`); rerun |
 | The run takes long | 11 editions to build | the kernel is cached; builds run in parallel |
 
 ## YAML and the graphical editor
@@ -87,5 +88,6 @@ free -h
 |---|---|---|
 | Extraction fails | missing volume | download **all** `*.7z.00N` into one directory, then `7z x …001` |
 | Checksum mismatch | interrupted download | compare with `meta/<image>.sha256` published in the release body |
-| Old release disappeared | automatic pruning | `KEEP_RELEASES` = 5 per edition; get a newer one |
-| No Latest badge on an edition | intended | only `image` (base) carries the badge |
+| Old release disappeared | automatic pruning | `KEEP_RELEASES` = 5 releases (one per run); get a newer one |
+| An edition is missing from the release | its build failed in that run | see the "not published" section of the release body, then the linked run |
+| One release per edition in the old format | releases created before the switch to one release per run | they are not pruned; delete them by hand once the new releases are verified |

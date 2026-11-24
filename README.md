@@ -121,7 +121,8 @@ All verbose output goes to `build.log`. The terminal shows a spinner with live p
 
 Each build of `--distro fedora` is described by one YAML file in
 `distros/fedora/`. The image name is read from `image.name` inside that YAML,
-so every edition gets its own file, its own archives and its own release:
+so every edition gets its own file and its own archives (all the editions built by
+one CI run are published together in a single release):
 
 | Edition | YAML | Image | Content |
 |---------|------|-------|---------|
@@ -146,11 +147,11 @@ so every edition gets its own file, its own archives and its own release:
 
 1. Copy an existing YAML, e.g. `cp distros/fedora/fedora-dev_edition.yaml distros/fedora/fedora-my_edition.yaml`.
 2. Change `image.name` (that becomes the `.img`, the archives and the release tag prefix) and `image.description`, then edit the package list.
-3. Nothing else to wire: the CI lists `distros/fedora/*.yaml` and builds, compresses and releases every file it finds.
+3. Nothing else to wire: the CI lists `distros/fedora/*.yaml` and builds, compresses and publishes every file it finds. To also get a tickable entry in the manual *Run workflow* form, add a `type: boolean` input named after the YAML in `.github/workflows/build-image.yml`.
 
 `image.yaml` is also the edition used for the kernel-only job, so keep it as the base build.
 
-Keep the runtime toolchain (`git`, `make`, `gcc`, `binutils`, `pkgconf`) in editions that install `ps5-linux-tools` during the build, and `steam`/`gamescope`/`mangohud`/`gamemode` are installed from RPM Fusion in `post-packages` for the gaming editions.
+Keep the runtime toolchain (`git`, `make`, `gcc`, `binutils`, `pkgconf`, `zlib-devel` — `m2_init.c` includes `<zlib.h>`) in editions that install `ps5-linux-tools` during the build, and `steam`/`gamescope`/`mangohud`/`gamemode` are installed from RPM Fusion in `post-packages` for the gaming editions.
 
 ## Éditeur graphique d'éditions
 
@@ -182,12 +183,14 @@ seuls les paquets, le nom et la description sont alors modifiables (rien n'est p
 
 ## Releases
 
-Every CI build publishes one release per edition:
+One release per CI build, containing every edition that built:
 
-- tag: `<image.name>-YYYY.MM.DD-HHMM` (UTC), e.g. `ps5-fedora-gaming_edition-2026.11.24-1830`
-- assets: the 7z volumes of that edition (`ps5-<edition>.img.7z.001`, `.002`, ...)
+- tag: `ps5-<distro>-images-YYYY.MM.DD-HHMMSS` (UTC), e.g. `ps5-fedora-images-2026.11.24-020015`
+- assets: the 7z volumes of all the editions (`ps5-fedora.img.7z.001`, `ps5-fedora-kde_edition.img.7z.001`, ...)
+- body: a table of editions, then one section per image (description, kernel, patches, build date, volumes, SHA256) and the editions that failed, with a link to the run
 - nothing is overwritten: a new build creates a new release, older ones are untouched
-- the 5 newest releases of each edition are kept; older ones are pruned. Change `KEEP_RELEASES` in `.github/workflows/build-image.yml` to keep more.
+- the 5 newest releases are kept; older ones are pruned. Change `KEEP_RELEASES` in `.github/workflows/build-image.yml` to keep more.
+- releases created by the old per-edition scheme (`<image.name>-YYYY.MM.DD-HHMM`) are not pruned: delete them by hand once the new releases are verified.
 
 ## Multi-distro Image
 

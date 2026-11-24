@@ -1,6 +1,8 @@
 name: Build Image
 run-name: >-
-  Build Image (${{ inputs.distro || 'fedora' }}${{ inputs.variant && format(' · {0}', inputs.variant) || ' · all editions' }})
+  Build Image (${{ inputs.distro || 'fedora' }} · ${{
+    (inputs.all_editions == false || inputs.all_editions == 'false')
+      && 'édition(s) choisie(s)' || 'toutes les éditions' }})
 
 on:
   workflow_dispatch:
@@ -10,10 +12,65 @@ on:
         default: 'fedora'
         type: choice
         options: [fedora]
+      all_editions:
+        description: 'Tout construire — décocher pour choisir avec les cases ci-dessous'
+        type: boolean
+        default: true
       variant:
-        description: 'Edition YAML (stem of distros/<distro>/<name>.yaml). Empty = build every edition.'
-        default: ''
+        description: 'Éditions à ajouter (noms sans .yaml, séparés par des virgules)'
         type: string
+        default: ''
+      skip_editions:
+        description: 'Éditions à exclure (noms sans .yaml, séparés par des virgules)'
+        type: string
+        default: ''
+      # --- Une case par YAML de distros/fedora/ : cocher = construire cette
+      # édition. Ces cases ne servent que si « Tout construire » est décoché ;
+      # tant qu'il reste coché, un YAML ajouté plus tard est pris tout seul.
+      image:
+        description: 'image — base GNOME (ps5-fedora)'
+        type: boolean
+        default: false
+      fedora-cosmic_edition:
+        description: 'fedora-cosmic_edition — COSMIC (ps5-fedora-cosmic_edition)'
+        type: boolean
+        default: false
+      fedora-desktop_edition:
+        description: 'fedora-desktop_edition — GNOME allégé (ps5-fedora-desktop_edition)'
+        type: boolean
+        default: false
+      fedora-dev_edition:
+        description: 'fedora-dev_edition — GNOME développeur (ps5-fedora-dev_edition)'
+        type: boolean
+        default: false
+      fedora-gaming_edition:
+        description: 'fedora-gaming_edition — GNOME gaming (ps5-fedora-gaming_edition)'
+        type: boolean
+        default: false
+      fedora-kde_edition:
+        description: 'fedora-kde_edition — KDE Plasma (ps5-fedora-kde_edition)'
+        type: boolean
+        default: false
+      fedora-minimal_setup:
+        description: 'fedora-minimal_setup — CLI/SSH (ps5-fedora-minimal_setup)'
+        type: boolean
+        default: false
+      fedora-miraclewm_edition:
+        description: 'fedora-miraclewm_edition — Miracle WM (ps5-fedora-miraclewm_edition)'
+        type: boolean
+        default: false
+      fedora-niri_edition:
+        description: 'fedora-niri_edition — Niri (ps5-fedora-niri_edition)'
+        type: boolean
+        default: false
+      fedora-sway_edition:
+        description: 'fedora-sway_edition — Sway (ps5-fedora-sway_edition)'
+        type: boolean
+        default: false
+      fedora-test_build:
+        description: 'fedora-test_build — copie de test (ps5-fedora-test_build)'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       distro:
@@ -21,13 +78,21 @@ on:
         type: string
         default: 'fedora'
       variant:
-        description: 'Edition YAML stem. Empty = build every edition.'
+        description: 'Extra edition stems, comma separated. Empty = every edition.'
         type: string
         default: ''
+      skip_editions:
+        description: 'Edition stems to exclude, comma separated.'
+        type: string
+        default: ''
+      all_editions:
+        description: 'Build every edition discovered in distros/<distro>/*.yaml.'
+        type: boolean
+        default: true
 
 env:
   DISTRO: ${{ inputs.distro || 'fedora' }}
-  # Number of dated releases kept per edition (the newest ones win).
+  # Nombre de releases datées conservées (une release par run, pas par édition).
   KEEP_RELEASES: '5'
 
 jobs:
@@ -48,6 +113,9 @@ jobs:
         shell: bash
         env:
           ONLY: ${{ inputs.variant || '' }}
+          SKIP: ${{ inputs.skip_editions || '' }}
+          ALL_EDITIONS: ${{ inputs.all_editions }}
+          FORM: ${{ toJSON(inputs) }}
         run: |
           set -euo pipefail
           dir="image/distros/${DISTRO}"
@@ -56,22 +124,64 @@ jobs:
             | sed 's/\.yaml$//' | sort)
           [ ${#all[@]} -gt 0 ] || { echo "::error::No *.yaml editions in $dir"; exit 1; }
 
-          if [ -n "$ONLY" ]; then
-            selected=()
-            for edition in "${all[@]}"; do
-              [ "$edition" = "$ONLY" ] && selected+=("$edition")
-            done
-            [ ${#selected[@]} -gt 0 ] || {
-              echo "::error::Unknown edition '$ONLY'. Available: ${all[*]}"
-              exit 1
-            }
-          else
-            selected=("${all[@]}")
+          declare -A known=() pick=() drop=()
+          for edition in "${all[@]}"; do known["$edition"]=1; done
+
+          # Découpe une liste « a, b,c » en un nom par ligne.
+          words() { tr ', \t' '\n\n\n' <<<"${1:-}" | sed '/^$/d'; }
+
+          # Cases cochées dans le formulaire : la clé de l'entrée est le nom du YAML.
+          mapfile -t ticked < <(jq -r 'to_entries[]
+            | select(.key != "all_editions" and .key != "distro")
+            | select(.value == true) | .key' <<<"$FORM")
+
+          if [ "${ALL_EDITIONS:-false}" = "true" ]; then
+            for edition in "${all[@]}"; do pick["$edition"]=1; done
           fi
+
+          for edition in "${ticked[@]}"; do
+            if [ -n "${known[$edition]:-}" ]; then
+              pick["$edition"]=1
+            else
+              echo "::warning::Case « $edition » cochée mais ${dir}/${edition}.yaml n'existe pas : ignorée."
+            fi
+          done
+
+          while IFS= read -r edition; do
+            if [ -z "${known[$edition]:-}" ]; then
+              echo "::error::Unknown edition '$edition'. Available: ${all[*]}"
+              exit 1
+            fi
+            pick["$edition"]=1
+          done < <(words "$ONLY")
+
+          while IFS= read -r edition; do
+            if [ -z "${known[$edition]:-}" ]; then
+              echo "::warning::Exclusion ignorée, édition inconnue : '$edition'."
+            fi
+            drop["$edition"]=1
+          done < <(words "$SKIP")
+
+          selected=()
+          for edition in "${all[@]}"; do
+            if [ -n "${pick[$edition]:-}" ] && [ -z "${drop[$edition]:-}" ]; then
+              selected+=("$edition")
+            fi
+          done
+
+          [ ${#selected[@]} -gt 0 ] || {
+            echo "::error::Aucune édition sélectionnée. Cochez « Tout construire », cochez une ou plusieurs cases, ou renseignez 'variant'."
+            exit 1
+          }
 
           json=$(printf '%s\n' "${selected[@]}" | jq -R . | jq -sc .)
           echo "list=$json" >> "$GITHUB_OUTPUT"
-          echo "Editions to build: $json"
+          echo "Editions to build (${#selected[@]}/${#all[@]}): $json"
+          {
+            echo "### Éditions construites (${#selected[@]}/${#all[@]})"
+            echo
+            printf -- '- `%s`\n' "${selected[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # The kernel is identical for every edition: compile it once, then feed the
   # package to each image build (build_image.sh skips the kernel stage when
@@ -312,38 +422,161 @@ jobs:
             echo "Open the **Build ${edition} image** step log above for the failing command."
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
-
-  # One dated release per edition. Old releases are never overwritten: each
-  # build publishes under its own tag (<image>-<UTC date>-<time>) and only the
-  # releases beyond KEEP_RELEASES oldest ones are removed.
-  release:
+  # ---------------------------------------------------------------------------
+  # UNE release par run, pas une par édition : toutes les éditions construites
+  # deviennent les assets de la même release datée
+  # (tag ps5-<distro>-images-<horodatage>), pour que la page Releases reste
+  # lisible. Ce job crée la release (notes seules) ; le job `release` ci-dessous
+  # y ajoute ensuite les volumes de chaque édition en parallèle.
+  # ---------------------------------------------------------------------------
+  publish:
     needs: [editions, build]
     runs-on: ubuntu-latest
-    concurrency:
-      group: ps5-image-release-${{ matrix.edition }}
-      cancel-in-progress: false
-    # Runs even when some edition builds failed (!cancelled()): each matrix leg
-    # only publishes when its own artifacts exist ("Check build output" below),
-    # so a broken edition never blocks or deletes the good releases.
+    # Tourne même si des éditions ont échoué (!cancelled()) : les notes sont
+    # assemblées à partir des artefacts meta-*, qui n'existent que pour les
+    # builds réussis. Les éditions en échec sont listées dans le corps.
     if: ${{ !cancelled() && needs.editions.result == 'success' }}
     permissions:
       contents: write
-    timeout-minutes: 30
-    strategy:
-      # Uploads are network-bound and isolated per edition: run them in
-      # parallel instead of waiting for one release at a time.
-      fail-fast: false
-      matrix:
-        edition: ${{ fromJson(needs.editions.outputs.list) }}
-
+    timeout-minutes: 20
+    outputs:
+      created: ${{ steps.create.outputs.created }}
+      tag: ${{ steps.info.outputs.tag }}
     steps:
       - name: Download build metadata
         continue-on-error: true
         uses: actions/download-artifact@v6
         with:
-          name: meta-${{ matrix.edition }}
+          pattern: meta-*
           path: meta
 
+      - name: Compute release tag
+        id: info
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp=$(date -u +%Y.%m.%d-%H%M%S)
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+          echo "tag=ps5-${DISTRO}-images-${stamp}" >> "$GITHUB_OUTPUT"
+          echo "title=PS5 ${DISTRO^} — toutes les images (${stamp} UTC)" >> "$GITHUB_OUTPUT"
+          echo "Release tag: ps5-${DISTRO}-images-${stamp}"
+
+      - name: Assemble release notes
+        id: notes
+        shell: bash
+        env:
+          EDITIONS: ${{ needs.editions.outputs.list }}
+          STAMP: ${{ steps.info.outputs.stamp }}
+          KVER: ${{ needs.kernel.outputs.kver }}
+          PSHA: ${{ needs.kernel.outputs.psha }}
+        run: |
+          set -euo pipefail
+          mapfile -t editions < <(jq -r '.[]' <<<"$EDITIONS")
+          published=()
+          failed=()
+          for edition in "${editions[@]}"; do
+            if [ -f "meta/meta-${edition}/img_name" ]; then
+              published+=("$edition")
+            else
+              failed+=("$edition")
+            fi
+          done
+
+          {
+            printf '# PS5 %s — toutes les images (%s UTC)\n\n' "${DISTRO^}" "$STAMP"
+            printf 'Une seule release par build : les images de toutes les éditions publiées par ce run sont ici.\n\n'
+            if [ -n "${KVER:-}" ] && [ "$KVER" != unknown ]; then
+              printf 'Noyau : `%s` · patches [`%s`](https://github.com/ps5-linux/ps5-linux-patches/commit/%s)\n\n' "$KVER" "$PSHA" "$PSHA"
+            fi
+            printf 'Éditions publiées : **%d/%d**.\n\n' "${#published[@]}" "${#editions[@]}"
+
+            if [ ${#published[@]} -gt 0 ]; then
+              printf '| Édition | Image | Volumes |\n|---|---|---|\n'
+              for edition in "${published[@]}"; do
+                img=$(cat "meta/meta-${edition}/img_name")
+                count=$(grep -c . "meta/meta-${edition}/${img}.sha256" || true)
+                printf '| `%s` | `%s` | %s |\n' "$edition" "$img" "${count:-0}"
+              done
+              printf '\nLes volumes arrivent au fil des uploads : la release se remplit pendant que les jobs tournent.\n\n'
+            fi
+
+            for edition in "${published[@]}"; do
+              m="meta/meta-${edition}"
+              img=$(cat "$m/img_name")
+              printf '\n---\n\n## `%s`\n\n' "$img"
+              if [ -s "$m/description" ]; then
+                printf '%s\n\n' "$(cat "$m/description")"
+              fi
+              printf -- '- Édition : `%s` (`distros/%s/%s.yaml`)\n' "$edition" "$DISTRO" "$edition"
+              if [ -s "$m/kver" ]; then
+                printf -- '- Noyau : `%s`\n' "$(cat "$m/kver")"
+              fi
+              if [ -s "$m/psha" ]; then
+                printf -- '- Patches : `%s`\n' "$(cat "$m/psha")"
+              fi
+              if [ -s "$m/ts" ]; then
+                printf -- '- Compilé : `%s` (UTC)\n' "$(cat "$m/ts")"
+              fi
+              printf -- '- Archives (tous les volumes, puis extraire le `.001`) :\n'
+              while IFS= read -r line; do
+                if [ -n "$line" ]; then
+                  printf '  - `%s`\n' "$(awk '{print $2}' <<<"$line")"
+                fi
+              done < "$m/${img}.sha256"
+              printf '\nSHA256 :\n\n```\n'
+              cat "$m/${img}.sha256"
+              printf '```\n'
+            done
+
+            if [ ${#failed[@]} -gt 0 ]; then
+              printf '\n---\n\n## Éditions non publiées (%d)\n\n' "${#failed[@]}"
+              for edition in "${failed[@]}"; do
+                printf -- '- `%s` : build en échec, voir le [run](%s/%s/actions/runs/%s).\n' \
+                  "$edition" "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+              done
+            fi
+          } > body.md
+
+          cat body.md
+          if [ ${#published[@]} -gt 0 ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Aucune édition n'a produit d'archive : aucune release n'est créée."
+            exit 1
+          fi
+
+      - name: Create the release (assets are uploaded by the release matrix)
+        id: create
+        if: steps.notes.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.info.outputs.tag }}
+          TITLE: ${{ steps.info.outputs.title }}
+        run: |
+          set -euo pipefail
+          # La release existe avant les uploads : chaque job de la matrice ajoute
+          # ensuite ses propres volumes, sans se disputer la création du tag.
+          gh release create "$TAG" --title "$TITLE" --notes-file body.md \
+            --target "$GITHUB_SHA" --latest
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+  # Un job par édition, uniquement pour télécharger ses volumes et les ajouter à
+  # la release commune. `gh release upload` ne touche ni au titre ni au corps,
+  # donc les uploads parallèles ne se marchent pas dessus.
+  release:
+    needs: [editions, publish]
+    runs-on: ubuntu-latest
+    if: ${{ needs.publish.outputs.created == 'true' }}
+    permissions:
+      contents: write
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: ${{ fromJson(needs.editions.outputs.list) }}
+    steps:
       - name: Download built image parts
         continue-on-error: true
         uses: actions/download-artifact@v6
@@ -351,80 +584,43 @@ jobs:
           name: ps5-${{ matrix.edition }}-img
           path: output
 
-      - name: Check build output
-        id: check
+      - name: Add volumes to the release
         shell: bash
-        run: |
-          if [ -f meta/img_name ] && ls output/*.7z.* >/dev/null 2>&1; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No build output for edition ${{ matrix.edition }}; skipping its release."
-          fi
-
-      - name: Compute release tag
-        id: info
-        if: steps.check.outputs.ok == 'true'
-        shell: bash
-        run: |
-          img=$(cat meta/img_name)
-          date_utc=$(date -u +%Y.%m.%d-%H%M)
-          echo "img=$img" >> "$GITHUB_OUTPUT"
-          echo "date=$date_utc" >> "$GITHUB_OUTPUT"
-          echo "tag=${img}-${date_utc}" >> "$GITHUB_OUTPUT"
-          echo "title=${img} (${date_utc})" >> "$GITHUB_OUTPUT"
-
-      - name: Prepare release body
-        if: steps.check.outputs.ok == 'true'
-        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.publish.outputs.tag }}
         run: |
           set -euo pipefail
-          img=$(cat meta/img_name)
-          edition=$(cat meta/edition)
-          kver=$(cat meta/kver)
-          psha=$(cat meta/psha)
-          ts=$(cat meta/ts)
-          {
-            printf 'PS5 Linux image `%s` (edition `%s`).\n\n' "$img" "$edition"
-            if [ -s meta/description ]; then printf '%s\n\n' "$(cat meta/description)"; fi
-            printf 'Kernel: `%s`\n' "$kver"
-            printf 'Patches: [`%s`](https://github.com/ps5-linux/ps5-linux-patches/commit/%s)\n' "$psha" "$psha"
-            printf 'Built: `%s`\n\n' "$ts"
-            printf '**Archives** (7z split into 1.5 GiB volumes — download every part, then extract `*.001`):\n\n'
-            for f in output/*.7z.*; do printf -- '- `%s`\n' "$(basename "$f")"; done
-            printf '\n**SHA256 checksums:**\n```\n'
-            cat "meta/${img}.sha256"
-            printf '```\n'
-          } > body.md
-          cat body.md
+          shopt -s nullglob
+          parts=(output/*.7z.*)
+          if [ ${#parts[@]} -eq 0 ]; then
+            echo "::warning::Aucune archive pour l'édition ${{ matrix.edition }} : rien à publier."
+            exit 0
+          fi
+          gh release upload "$TAG" "${parts[@]}" --clobber
 
-      - name: Create release
-        if: steps.check.outputs.ok == 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ steps.info.outputs.tag }}
-          name: ${{ steps.info.outputs.title }}
-          body_path: body.md
-          files: output/*.7z.*
-          fail_on_unmatched_files: true
-          # Only the base edition (distros/<distro>/image.yaml) owns the
-          # "Latest" badge, so parallel release jobs never fight over it.
-          make_latest: ${{ matrix.edition == 'image' && 'true' || 'false' }}
-
-      - name: Prune old releases
-        if: steps.check.outputs.ok == 'true'
+  # Élagage : on ne garde que KEEP_RELEASES releases datées (une par run).
+  release-prune:
+    needs: [publish, release]
+    runs-on: ubuntu-latest
+    if: ${{ always() && needs.publish.outputs.created == 'true' }}
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - name: Prune old dated releases
         uses: actions/github-script@v8
         env:
-          IMG_NAME: ${{ steps.info.outputs.img }}
+          DISTRO_NAME: ${{ env.DISTRO }}
           KEEP: ${{ env.KEEP_RELEASES }}
         with:
           script: |
             const keep = Number(process.env.KEEP || 5);
-            const img = process.env.IMG_NAME;
             const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Only this edition's dated tags: <image>-YYYY.MM.DD-HHMM
-            const re = new RegExp(`^${escape(img)}-\\d{4}\\.\\d{2}\\.\\d{2}-\\d{4}$`);
+            // Une release par run : ps5-<distro>-images-YYYY.MM.DD-HHMMSS
+            const re = new RegExp(
+              `^ps5-${escape(process.env.DISTRO_NAME)}-images-\\d{4}\\.\\d{2}\\.\\d{2}-\\d{6}$`
+            );
 
             const releases = await github.paginate(github.rest.repos.listReleases, {
               ...context.repo,
@@ -434,7 +630,7 @@ jobs:
               .filter((rel) => re.test(rel.tag_name))
               .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-            core.info(`${img}: ${mine.length} dated release(s), keeping the newest ${keep}`);
+            core.info(`${mine.length} dated release(s), keeping the newest ${keep}`);
             for (const rel of mine.slice(keep)) {
               core.info(`deleting old release ${rel.tag_name} (${rel.created_at})`);
               await github.rest.repos.deleteRelease({ ...context.repo, release_id: rel.id });

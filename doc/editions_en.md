@@ -1,9 +1,9 @@
 # The Fedora builds — catalogue
 
 Every build is **one YAML file** in `distros/fedora/`. The workflow discovers them
-automatically: adding a file is enough to get a new image, its archives and its own
-release. The image name, archive names and release tag come from `image.name` inside the
-YAML.
+automatically: adding a file is enough to get a new image and its archives, and every
+edition built by one run lands in **a single release**. The image name and archive names
+come from `image.name` inside the YAML.
 
 - Graphical editor: [`editor_en.md`](editor_en.md)
 - Builder internals: [`builder_en.md`](builder_en.md)
@@ -92,7 +92,7 @@ development toolchain. Pick it when the PS5 is a game console.
 ### Test — `fedora-test_build.yaml` → 194 packages
 
 A complete copy of the base under another name, used to try a change without touching the
-`ps5-fedora` releases (which own the Latest badge).
+`ps5-fedora` image or archives.
 
 ## Alternative Wayland family (137 listed packages)
 
@@ -161,8 +161,9 @@ starting point.
 - `--img-size` changes the image size, `--clean` starts from scratch.
 - Budget ~30 GB free: each edition keeps its chroot in
   `work/chroot-fedora-<edition>/` plus the 12 GB image.
-- Through GitHub Actions everything builds automatically (see [`ci_en.md`](ci_en.md)); a
-  single edition can be rebuilt with the `variant` input.
+- Through GitHub Actions everything builds automatically (see [`ci_en.md`](ci_en.md)); the
+  *Run workflow* form lets you tick the editions to build, or use `variant` /
+  `skip_editions`.
 
 ## Editing an edition
 
@@ -185,5 +186,5 @@ After a change, `git push` to `main` triggers a rebuild (unless the commit only 
 - The `ps5` password is public: change it after the first boot if the machine is exposed.
 - Every session is Wayland; an application requiring a full X11 server will not work
   (XWayland covers most cases).
-- Old releases are pruned to 5 per edition (`KEEP_RELEASES`), and CI artifacts expire
-  after 7 days.
+- Old releases are pruned to 5 (`KEEP_RELEASES`, one release per run), and CI artifacts
+  expire after 7 days.

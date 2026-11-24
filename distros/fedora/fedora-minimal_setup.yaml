@@ -49,12 +49,15 @@ packages:
         - tar
         - xz
 
-        # Toolchain used to compile ps5-linux-tools (fan/boost control)
+        # Toolchain used to compile ps5-linux-tools (fan/boost control).
+        # m2_init.c inclut <zlib.h> et le Makefile passe -lz : zlib-devel est
+        # donc obligatoire, sinon `make` échoue sur « zlib.h: No such file ».
         - git
         - make
         - gcc
         - binutils
         - pkgconf
+        - zlib-devel
 
         # Localization
         - glibc-all-langpacks
