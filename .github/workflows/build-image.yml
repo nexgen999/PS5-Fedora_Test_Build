@@ -101,11 +101,31 @@ jobs:
           echo "kver=$kver" >> "$GITHUB_OUTPUT"
           echo "psha=$psha" >> "$GITHUB_OUTPUT"
 
+      # linux-bin/ also holds the staging tree written by the build container,
+      # which is root-owned (upload-artifact runs as the runner and cannot read
+      # some of those files). Only the .rpm is needed by the image builds, so
+      # copy it into a runner-owned directory and publish that.
+      - name: Collect kernel package
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          rpms=(image/linux-bin/*.rpm)
+          [ ${#rpms[@]} -gt 0 ] || { echo "::error::no .rpm produced in image/linux-bin"; exit 1; }
+          mkdir -p kernel-pkg
+          sudo cp "${rpms[@]}" kernel-pkg/
+          if [ -f image/linux-bin/VERSION ]; then
+            sudo cp image/linux-bin/VERSION kernel-pkg/
+          fi
+          sudo chown "$(id -u):$(id -g)" kernel-pkg/*
+          chmod 0644 kernel-pkg/*
+          ls -lh kernel-pkg/
+
       - name: Upload kernel package
         uses: actions/upload-artifact@v6
         with:
           name: kernel-rpm
-          path: image/linux-bin/
+          path: kernel-pkg/
           retention-days: 7
           if-no-files-found: error
 
