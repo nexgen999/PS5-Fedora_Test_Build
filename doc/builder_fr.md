@@ -216,7 +216,7 @@ push vers `main` (sauf `tools/**`, `**.md`, `.gitignore`), sur lancement manuel,
 sur une PR étiquetée `run-ci`.
 
 ```
-editions ──► kernel ──► build (matrice, 1 édition à la fois) ──► release (matrice)
+editions ──► kernel ──► build (matrice, toutes les éditions en parallèle) ──► release (matrice)
 ```
 
 | Job | Rôle |

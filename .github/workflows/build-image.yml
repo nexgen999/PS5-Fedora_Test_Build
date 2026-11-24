@@ -79,7 +79,7 @@ jobs:
   kernel:
     needs: editions
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 300
     outputs:
       kver: ${{ steps.info.outputs.kver }}
       psha: ${{ steps.info.outputs.psha }}
@@ -203,15 +203,20 @@ jobs:
   build:
     needs: [editions, kernel]
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    # Room for a slow rootfs + 7z run, without parking a runner for 6 h.
+    timeout-minutes: 150
     concurrency:
       group: ps5-image-${{ matrix.edition }}
       cancel-in-progress: false
     permissions:
       contents: read
     strategy:
+      # One job per edition, all at the same time: every leg gets its own
+      # runner, so nothing is shared. max-parallel is deliberately unset (the
+      # whole matrix starts at once) and GitHub queues whatever exceeds the
+      # account's concurrent-job limit. fail-fast must stay false so one broken
+      # edition never cancels the others.
       fail-fast: false
-      max-parallel: 1
       matrix:
         edition: ${{ fromJson(needs.editions.outputs.list) }}
 
@@ -245,7 +250,8 @@ jobs:
           img=$(bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}" --print-name)
           test -f "image/output/${img}.img"
           ls -lh "image/output/${img}.img"
-          sha256sum "image/output/${img}.img"
+          # The image itself is not published (only the 7z volumes, hashed in
+          # "Save build metadata"), so skip a 12 GB read just to log a hash.
 
       - name: Compress and split image into 1.5GB parts (7z)
         if: steps.build.outcome == 'success'
@@ -322,9 +328,11 @@ jobs:
     if: ${{ !cancelled() && needs.editions.result == 'success' }}
     permissions:
       contents: write
+    timeout-minutes: 30
     strategy:
+      # Uploads are network-bound and isolated per edition: run them in
+      # parallel instead of waiting for one release at a time.
       fail-fast: false
-      max-parallel: 1
       matrix:
         edition: ${{ fromJson(needs.editions.outputs.list) }}
 

@@ -214,7 +214,7 @@ reference build.
 `run-ci`-labelled pull request.
 
 ```
-editions ──► kernel ──► build (matrix, one edition at a time) ──► release (matrix)
+editions ──► kernel ──► build (matrix, every edition in parallel) ──► release (matrix)
 ```
 
 | Job | Role |
