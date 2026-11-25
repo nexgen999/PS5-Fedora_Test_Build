@@ -7,8 +7,8 @@ Fichier généré par `tools/edition_editor.py` (bouton « Comparatif des builds
 | Build | Image | Paquets | Blocs | Dépôts | Paquets ajoutés | Flatpaks | Scripts |
 |---|---|--:|--:|--:|--:|--:|--:|
 | `base` | `ps5-fedora` | 194 | 25 | 0 | 0 | 0 | 0 |
-| `budgie_edition` | `ps5-fedora-budgie_edition` | 145 | 23 | 0 | 0 | 0 | 0 |
-| `cinnamon_edition` | `ps5-fedora-cinnamon_edition` | 145 | 23 | 0 | 0 | 0 | 0 |
+| `budgie_edition` | `ps5-fedora-budgie_edition` | 148 | 23 | 0 | 0 | 0 | 0 |
+| `cinnamon_edition` | `ps5-fedora-cinnamon_edition` | 148 | 23 | 0 | 0 | 0 | 0 |
 | `cosmic_edition` | `ps5-fedora-cosmic_edition` | 137 | 23 | 0 | 0 | 0 | 0 |
 | `desktop_edition` | `ps5-fedora-desktop_edition` | 181 | 23 | 0 | 0 | 0 | 0 |
 | `dev_edition` | `ps5-fedora-dev_edition` | 189 | 23 | 0 | 0 | 0 | 0 |
@@ -222,7 +222,10 @@ Fichier généré par `tools/edition_editor.py` (bouton « Comparatif des builds
 | `xorg-x11-drv-amdgpu` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
 | `xorg-x11-drv-libinput` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
 | `xorg-x11-xinit` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
-| `xorg-x11-utils` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
+| `xset` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
+| `xprop` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
+| `xrandr` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
+| `xdpyinfo` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
 | `adwaita-icon-theme` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
 | `hicolor-icon-theme` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
 | `glib2` |  | ✓ | ✓ |  |  |  |  |  |  |  |  |  |  |
@@ -288,13 +291,13 @@ Fichier généré par `tools/edition_editor.py` (bouton « Comparatif des builds
 
 ### `budgie_edition` — `ps5-fedora-budgie_edition`
 
-- **Paquets en plus de la base** : `xorg-x11-server-Xorg`, `xorg-x11-drv-amdgpu`, `xorg-x11-drv-libinput`, `xorg-x11-xinit`, `xorg-x11-utils`, `adwaita-icon-theme`, `hicolor-icon-theme`, `glib2`, `p7zip`
+- **Paquets en plus de la base** : `xorg-x11-server-Xorg`, `xorg-x11-drv-amdgpu`, `xorg-x11-drv-libinput`, `xorg-x11-xinit`, `xset`, `xprop`, `xrandr`, `xdpyinfo`, `adwaita-icon-theme`, `hicolor-icon-theme`, `glib2`, `p7zip`
 - **Paquets retirés de la base** : 58 (voir le tableau)
 - **Blocs propres à l'édition** : Budgie à la place de GNOME, Session graphique (Budgie, CUPS, Bluetooth), Autologin SDDM (Budgie)
 
 ### `cinnamon_edition` — `ps5-fedora-cinnamon_edition`
 
-- **Paquets en plus de la base** : `xorg-x11-server-Xorg`, `xorg-x11-drv-amdgpu`, `xorg-x11-drv-libinput`, `xorg-x11-xinit`, `xorg-x11-utils`, `adwaita-icon-theme`, `hicolor-icon-theme`, `glib2`, `p7zip`
+- **Paquets en plus de la base** : `xorg-x11-server-Xorg`, `xorg-x11-drv-amdgpu`, `xorg-x11-drv-libinput`, `xorg-x11-xinit`, `xset`, `xprop`, `xrandr`, `xdpyinfo`, `adwaita-icon-theme`, `hicolor-icon-theme`, `glib2`, `p7zip`
 - **Paquets retirés de la base** : 58 (voir le tableau)
 - **Blocs propres à l'édition** : Cinnamon (X11) à la place de GNOME, Session graphique (Cinnamon X11, CUPS, Bluetooth), Autologin LightDM (Cinnamon X11)
 

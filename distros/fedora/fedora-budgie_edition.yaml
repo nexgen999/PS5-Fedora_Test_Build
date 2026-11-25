@@ -44,7 +44,10 @@ packages:
         - xorg-x11-drv-amdgpu
         - xorg-x11-drv-libinput
         - xorg-x11-xinit
-        - xorg-x11-utils
+        - xset
+        - xprop
+        - xrandr
+        - xdpyinfo
         - adwaita-icon-theme
         - hicolor-icon-theme
         - glib2
@@ -286,9 +289,10 @@ actions:
       # applications X11 passent par XWayland ; le serveur Xorg reste installé
       # pour une session X11 classique.
       dnf install -y --skip-unavailable xorg-x11-server-Xorg xorg-x11-drv-amdgpu \
-          xorg-x11-drv-libinput xorg-x11-xinit xorg-x11-utils \
-          xorg-x11-server-utils xorg-x11-server-Xwayland || true
-      dnf install -y --skip-unavailable polkit-gnome || true
+          xorg-x11-drv-libinput xorg-x11-xinit \
+          xset xprop xrandr xdpyinfo \
+          xorg-x11-server-Xwayland || true
+      dnf install -y --skip-unavailable mate-polkit || true
       { command -v budgie-desktop >/dev/null || compgen -G '/usr/share/*sessions/budgie*.desktop' >/dev/null; } \
           || { echo "ERREUR: Budgie absent, environnement Budgie non installé"; exit 1; }
 

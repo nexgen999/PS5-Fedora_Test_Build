@@ -139,8 +139,8 @@ graphical polkit agent `pkexec` needs:
 
 | Edition | Installation | Session / autologin |
 |---|---|---|
-| Cinnamon | `@cinnamon-desktop-environment` + `lightdm`/`slick-greeter`, `polkit-gnome` | LightDM, `user-session=cinnamon` (X11 session), `ps5` autologin (`autologin` group) |
-| Budgie | `@budgie-desktop-environment` + `budgie-desktop-apps`, SDDM, `polkit-gnome` | SDDM, `Session=` detected in `/usr/share/wayland-sessions` (labwc) or `/usr/share/xsessions` |
+| Cinnamon | `@cinnamon-desktop-environment` + `lightdm`/`slick-greeter`, `mate-polkit` | LightDM, `user-session=cinnamon` (X11 session), `ps5` autologin (`autologin` group) |
+| Budgie | `@budgie-desktop-environment` + `budgie-desktop-apps`, SDDM, `mate-polkit` | SDDM, `Session=` detected in `/usr/share/wayland-sessions` (labwc) or `/usr/share/xsessions` |
 
 - **X11 and XWayland**: `xorg-x11-server-Xorg`, the `amdgpu` driver and XWayland are
   installed in both editions. Cinnamon runs an X11 session like the Fedora spin; Budgie

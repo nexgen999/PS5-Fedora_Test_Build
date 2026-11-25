@@ -44,7 +44,10 @@ packages:
         - xorg-x11-drv-amdgpu
         - xorg-x11-drv-libinput
         - xorg-x11-xinit
-        - xorg-x11-utils
+        - xset
+        - xprop
+        - xrandr
+        - xdpyinfo
         - adwaita-icon-theme
         - hicolor-icon-theme
         - glib2
@@ -285,11 +288,12 @@ actions:
       # X11 complet + XWayland : la session Cinnamon est en X11 (comme le spin),
       # XWayland reste disponible pour les applications X11 des autres sessions.
       dnf install -y --skip-unavailable xorg-x11-server-Xorg xorg-x11-drv-amdgpu \
-          xorg-x11-drv-libinput xorg-x11-xinit xorg-x11-utils \
-          xorg-x11-server-utils xorg-x11-server-Xwayland || true
+          xorg-x11-drv-libinput xorg-x11-xinit \
+          xset xprop xrandr xdpyinfo \
+          xorg-x11-server-Xwayland || true
       # Agent polkit graphique : pkexec (PS5 Fedora Manager) demande le mot de
       # passe depuis la session Cinnamon.
-      dnf install -y --skip-unavailable polkit-gnome || true
+      dnf install -y --skip-unavailable mate-polkit || true
       command -v cinnamon-session >/dev/null || [ -f /usr/share/xsessions/cinnamon.desktop ] \
           || { echo "ERREUR: Cinnamon absent, environnement Cinnamon non installé"; exit 1; }
 

@@ -149,8 +149,8 @@ socle X11 complet et l'agent polkit graphique nécessaire à `pkexec` :
 
 | Édition | Installation | Session / autologin |
 |---|---|---|
-| Cinnamon | `@cinnamon-desktop-environment` + `lightdm`/`slick-greeter`, `polkit-gnome` | LightDM, `user-session=cinnamon` (session X11), autologin `ps5` (groupe `autologin`) |
-| Budgie | `@budgie-desktop-environment` + `budgie-desktop-apps`, SDDM, `polkit-gnome` | SDDM, `Session=` détecté dans `/usr/share/wayland-sessions` (labwc) ou `/usr/share/xsessions` |
+| Cinnamon | `@cinnamon-desktop-environment` + `lightdm`/`slick-greeter`, `mate-polkit` | LightDM, `user-session=cinnamon` (session X11), autologin `ps5` (groupe `autologin`) |
+| Budgie | `@budgie-desktop-environment` + `budgie-desktop-apps`, SDDM, `mate-polkit` | SDDM, `Session=` détecté dans `/usr/share/wayland-sessions` (labwc) ou `/usr/share/xsessions` |
 
 - **X11 et XWayland** : `xorg-x11-server-Xorg`, le pilote `amdgpu` et XWayland sont
   installés dans les deux éditions. Cinnamon ouvre une session X11 comme le spin Fedora ;
