@@ -358,7 +358,13 @@ jobs:
       - name: Build ${{ matrix.edition }} image
         id: build
         continue-on-error: true
-        run: bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}"
+        shell: bash
+        # The output is kept in build.log: because the step is continue-on-error
+        # its log is easy to miss, so the failure step below republishes the last
+        # lines (summary + annotations). pipefail keeps the build's exit status.
+        run: |
+          set -o pipefail
+          bash image/build_image.sh --distro "${DISTRO}" --variant "${{ matrix.edition }}" 2>&1 | tee build.log
 
       - name: Report
         if: steps.build.outcome == 'success'
@@ -427,8 +433,22 @@ jobs:
             echo "### ❌ Edition \`${edition}\` failed to build"
             echo
             echo "The other editions keep building and every successful one is published as usual."
-            echo "Open the **Build ${edition} image** step log above for the failing command."
+            echo
+            echo "<details><summary>Last lines of the build log</summary>"
+            echo
+            echo '```'
+            tail -n 40 build.log 2>/dev/null | sed 's/\r$//' || true
+            echo '```'
+            echo
+            echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
+          # Annotations are readable without a token, unlike the step log: put the
+          # real error lines there so the cause is visible from the run page.
+          tail -n 8 build.log 2>/dev/null | sed 's/\r$//' | sed 's/::/:/g' |
+            while IFS= read -r line; do
+              [ -n "${line//[[:space:]]/}" ] || continue
+              echo "::error title=${edition} build error::${line:0:900}"
+            done || true
           exit 1
   # ---------------------------------------------------------------------------
   # UNE release par run, pas une par édition : toutes les éditions construites
