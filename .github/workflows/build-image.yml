@@ -437,18 +437,21 @@ jobs:
             echo "<details><summary>Last lines of the build log</summary>"
             echo
             echo '```'
-            tail -n 40 build.log 2>/dev/null | sed 's/\r$//' || true
+            tail -n 120 build.log 2>/dev/null | sed 's/\r$//' || true
             echo '```'
             echo
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
           # Annotations are readable without a token, unlike the step log: put the
           # real error lines there so the cause is visible from the run page.
-          tail -n 8 build.log 2>/dev/null | sed 's/\r$//' | sed 's/::/:/g' |
-            while IFS= read -r line; do
-              [ -n "${line//[[:space:]]/}" ] || continue
-              echo "::error title=${edition} build error::${line:0:900}"
-            done || true
+          diag=$(sed 's/\r$//' build.log 2>/dev/null \
+            | grep -aE 'No match for argument|nothing provides|conflicting requests|Problem:|error:|Error:|Failed|unavailable' \
+            | tail -n 9 || true)
+          [ -n "${diag//[[:space:]]/}" ] || diag=$(tail -n 9 build.log 2>/dev/null || true)
+          while IFS= read -r line; do
+            [ -n "${line//[[:space:]]/}" ] || continue
+            echo "::error title=${edition} build error::$(printf '%s' "${line:0:900}" | sed 's/::/:/g')"
+          done <<< "$diag"
           exit 1
   # ---------------------------------------------------------------------------
   # UNE release par run, pas une par édition : toutes les éditions construites

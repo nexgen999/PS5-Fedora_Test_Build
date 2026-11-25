@@ -472,7 +472,10 @@ actions:
       exit 0
       SCRIPT
       chmod 0755 /usr/local/sbin/ps5-no-sleep
-      ln -sf /usr/local/sbin/ps5-no-sleep /usr/local/bin/ps5-no-sleep
+      # Sur certaines distributions /usr/local/bin est le même dossier que
+      # /usr/local/sbin : le lien est alors inutile (ln refuserait) sans que
+      # la commande cesse d'être dans le PATH.
+      ln -sf /usr/local/sbin/ps5-no-sleep /usr/local/bin/ps5-no-sleep 2>/dev/null || true
       install -d /etc/xdg/autostart
       cat > /etc/xdg/autostart/ps5-no-sleep.desktop <<'EOF'
       [Desktop Entry]
