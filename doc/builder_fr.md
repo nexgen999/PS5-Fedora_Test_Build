@@ -195,7 +195,9 @@ Points importants :
   (et `binutils`, `pkgconf`) doit rester dans les éditions concernées.
 - Blocs présents dans toutes les builds : noyau, WiFi interne, fan ON/boost ON,
   PS5 Fedora Manager, RPM Fusion, Flathub, grow-rootfs, SELinux, utilisateur par
-  défaut, zram.
+  défaut, zram, et mise en veille désactivée (`sudo ps5-no-sleep` : cibles
+  `sleep`/`suspend`/`hibernate` masquées, `logind` sans inactivité, autostart XDG pour
+  l'écran).
 
 ## Ajouter une édition
 

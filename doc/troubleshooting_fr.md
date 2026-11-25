@@ -43,8 +43,10 @@ en découlent presque toujours.
 | Le job `kernel` ne recompile pas | cache valide (tag de patches et recettes inchangés) | comportement voulu ; pour forcer, supprimer le cache `kernel-rpm-…` dans Actions → Caches |
 | `No build output for edition X; skipping its release` | build en échec ou artefact absent | corriger le build ; la release du run contient les autres éditions |
 | `fatal error: zlib.h: No such file or directory` (étape `make` de ps5-linux-tools) | l'édition installe `ps5-linux-tools` sans les en-têtes zlib | ajouter `zlib-devel` au bloc toolchain (`m2_init.c` inclut `<zlib.h>`, le Makefile passe `-lz`) — corrigé pour `minimal_setup` |
+| L'écran s'éteint ou la PS5 se met en veille | réglages du bureau ou `systemd-logind` | lancer `sudo ps5-no-sleep` (masque `sleep`/`suspend`/`hibernate`, coupe l'extinction d'écran GNOME/Cinnamon/Budgie/KDE) ; il tourne aussi à chaque login |
+| `fatal: not a git repository` dans `publish` | job sans `checkout`, `gh` ne peut pas deviner le dépôt | les commandes `gh release create/upload` passent `--repo "$GITHUB_REPOSITORY"` |
 | Release refusée / tag déjà existant | deux runs dans la même seconde | le tag contient les secondes (`HHMMSS`) ; relancer |
-| Le run dure longtemps | 11 éditions à construire | le noyau est mis en cache ; les builds tournent en parallèle |
+| Le run dure longtemps | 13 éditions à construire | le noyau est mis en cache ; les builds tournent en parallèle |
 
 ## YAML et éditeur graphique
 

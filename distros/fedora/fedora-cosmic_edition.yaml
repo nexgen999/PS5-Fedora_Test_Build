@@ -363,6 +363,137 @@ actions:
       # --- zram swap ---
       printf '[zram0]\nzram-size = ram / 2\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf
 
+      # --- Mise en veille désactivée (système + écran) ---
+      # `sudo ps5-no-sleep` (re)désactive tout ; la même commande tourne au
+      # login via /etc/xdg/autostart pour l'écran.
+      systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target || true
+      systemctl stop sleep.target suspend.target hibernate.target hybrid-sleep.target || true
+      install -d /etc/systemd/logind.conf.d /etc/xdg
+      cat > /etc/systemd/logind.conf.d/ps5-no-sleep.conf <<'EOF'
+      [Login]
+      HandleSuspendKey=ignore
+      HandleHibernateKey=ignore
+      HandleLidSwitch=ignore
+      HandleLidSwitchExternalPower=ignore
+      HandleLidSwitchDocked=ignore
+      IdleAction=ignore
+      IdleActionSec=0
+      EOF
+      # Valeurs par défaut de KDE Plasma 6 (PowerDevil) : ni extinction ni
+      # suspension automatique de l'écran.
+      cat > /etc/xdg/powerdevilrc <<'EOF'
+      [AC][Display]
+      DimDisplayWhenIdle=false
+      DimDisplayIdleTimeoutSec=0
+      TurnOffDisplayWhenIdle=false
+      TurnOffDisplayIdleTimeoutSec=0
+      [AC][SuspendAndShutdown]
+      AutoSuspendAction=0
+      AutoSuspendIdleTimeoutSec=0
+      [Battery][Display]
+      DimDisplayWhenIdle=false
+      DimDisplayIdleTimeoutSec=0
+      TurnOffDisplayWhenIdle=false
+      TurnOffDisplayIdleTimeoutSec=0
+      [Battery][SuspendAndShutdown]
+      AutoSuspendAction=0
+      AutoSuspendIdleTimeoutSec=0
+      [LowBattery][Display]
+      DimDisplayWhenIdle=false
+      DimDisplayIdleTimeoutSec=0
+      TurnOffDisplayWhenIdle=false
+      TurnOffDisplayIdleTimeoutSec=0
+      [LowBattery][SuspendAndShutdown]
+      AutoSuspendAction=0
+      AutoSuspendIdleTimeoutSec=0
+      EOF
+      cat > /usr/local/sbin/ps5-no-sleep <<'SCRIPT'
+      #!/bin/bash
+      # ps5-no-sleep — supprime complètement la mise en veille du système et de l'écran.
+      #   sudo ps5-no-sleep       : système (systemd + logind) et écran
+      #   ps5-no-sleep --session  : écran seulement (lancé au login)
+      set -u
+
+      if [ "${1:-}" != "--session" ]; then
+          if [ "$(id -u)" -ne 0 ]; then
+              echo "ps5-no-sleep : utilisez « sudo ps5-no-sleep » pour couper la veille système." >&2
+              exit 1
+          fi
+          systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
+          systemctl stop sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
+          install -d /etc/systemd/logind.conf.d
+          cat > /etc/systemd/logind.conf.d/ps5-no-sleep.conf <<'EOF'
+      [Login]
+      HandleSuspendKey=ignore
+      HandleHibernateKey=ignore
+      HandleLidSwitch=ignore
+      HandleLidSwitchExternalPower=ignore
+      HandleLidSwitchDocked=ignore
+      IdleAction=ignore
+      IdleActionSec=0
+      EOF
+          systemctl kill -s HUP systemd-logind 2>/dev/null || true
+          echo "Veille système désactivée : sleep/suspend/hibernate masqués, logind ignore l'inactivité."
+          if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+              su - "$SUDO_USER" -c '/usr/local/bin/ps5-no-sleep --session' 2>/dev/null || true
+          fi
+      fi
+
+      # --- Écran : X11 / XWayland ---
+      if [ -n "${DISPLAY:-}" ] && command -v xset >/dev/null 2>&1; then
+          xset s off 2>/dev/null || true
+          xset -dpms 2>/dev/null || true
+          xset s noblank 2>/dev/null || true
+      fi
+
+      # --- GNOME, Cinnamon, Budgie, MATE : gsettings ---
+      if command -v gsettings >/dev/null 2>&1; then
+          gs() { gsettings set "$1" "$2" "$3" >/dev/null 2>&1 || true; }
+          gs org.gnome.desktop.session idle-delay 0
+          gs org.gnome.desktop.screensaver lock-enabled false
+          gs org.gnome.desktop.screensaver idle-activation-enabled false
+          gs org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing
+          gs org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type nothing
+          gs org.cinnamon.desktop.session idle-delay 0
+          gs org.cinnamon.desktop.screensaver lock-enabled false
+          gs org.cinnamon.desktop.screensaver idle-activation-enabled false
+          gs org.cinnamon.settings-daemon.plugins.power sleep-display-ac 0
+          gs org.cinnamon.settings-daemon.plugins.power sleep-display-battery 0
+          gs org.cinnamon.settings-daemon.plugins.power sleep-inactive-ac-type nothing
+          gs org.cinnamon.settings-daemon.plugins.power sleep-inactive-battery-type nothing
+      fi
+
+      # --- KDE Plasma 6 : PowerDevil + verrouillage d'écran ---
+      if command -v kwriteconfig6 >/dev/null 2>&1; then
+          for profile in AC Battery LowBattery; do
+              kwriteconfig6 --file powerdevilrc --group "$profile" --group Display \
+                  --key DimDisplayWhenIdle false >/dev/null 2>&1 || true
+              kwriteconfig6 --file powerdevilrc --group "$profile" --group Display \
+                  --key TurnOffDisplayWhenIdle false >/dev/null 2>&1 || true
+              kwriteconfig6 --file powerdevilrc --group "$profile" --group SuspendAndShutdown \
+                  --key AutoSuspendAction 0 >/dev/null 2>&1 || true
+              kwriteconfig6 --file powerdevilrc --group "$profile" --group SuspendAndShutdown \
+                  --key AutoSuspendIdleTimeoutSec 0 >/dev/null 2>&1 || true
+          done
+          kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false >/dev/null 2>&1 || true
+      fi
+
+      exit 0
+      SCRIPT
+      chmod 0755 /usr/local/sbin/ps5-no-sleep
+      ln -sf /usr/local/sbin/ps5-no-sleep /usr/local/bin/ps5-no-sleep
+      install -d /etc/xdg/autostart
+      cat > /etc/xdg/autostart/ps5-no-sleep.desktop <<'EOF'
+      [Desktop Entry]
+      Type=Application
+      Name=PS5 : pas de mise en veille
+      Comment=Désactive la mise en veille de l'écran et du système
+      Exec=/usr/local/bin/ps5-no-sleep --session
+      Terminal=false
+      NoDisplay=true
+      X-GNOME-Autostart-enabled=true
+      EOF
+
       # --- Service systemd automatique pour Fan ON et Boost ON ---
       cat > /etc/systemd/system/ps5-performance.service <<'EOF'
       [Unit]

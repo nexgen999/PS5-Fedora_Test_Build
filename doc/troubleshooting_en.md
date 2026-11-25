@@ -43,8 +43,10 @@ almost always consequences.
 | The `kernel` job does not recompile | valid cache (same patches tag and recipes) | intended; to force it, delete the `kernel-rpm-…` cache in Actions → Caches |
 | `No build output for edition X; skipping its release` | failed build or missing artifact | fix the build; the run's release still contains the other editions |
 | `fatal error: zlib.h: No such file or directory` (ps5-linux-tools `make` step) | the edition installs `ps5-linux-tools` without the zlib headers | add `zlib-devel` to the toolchain block (`m2_init.c` includes `<zlib.h>`, the Makefile links `-lz`) — fixed for `minimal_setup` |
+| The screen turns off or the PS5 sleeps | desktop settings or `systemd-logind` | run `sudo ps5-no-sleep` (masks `sleep`/`suspend`/`hibernate`, stops screen blanking on GNOME/Cinnamon/Budgie/KDE); it also runs at every login |
+| `fatal: not a git repository` in `publish` | job without `checkout`, `gh` cannot infer the repository | `gh release create/upload` pass `--repo "$GITHUB_REPOSITORY"` |
 | Release rejected / tag already exists | two runs within the same second | the tag carries seconds (`HHMMSS`); rerun |
-| The run takes long | 11 editions to build | the kernel is cached; builds run in parallel |
+| The run takes long | 13 editions to build | the kernel is cached; builds run in parallel |
 
 ## YAML and the graphical editor
 

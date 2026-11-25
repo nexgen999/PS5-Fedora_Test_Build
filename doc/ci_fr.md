@@ -159,6 +159,6 @@ Les volumes font 1,5 Gio pour rester sous la limite GitHub de 2 Gio par fichier.
   concentre seulement la durée sur une plage plus courte.
 - Limite d'espace des artefacts et du cache : 10 Go de cache par dépôt, artefacts comptés
   dans le quota du dépôt (rétention 1 à 7 jours).
-- Une image complète pèse ~3 à 4 Go compressée (3 volumes), soit ~11 éditions × 3 volumes
+- Une image complète pèse ~3 à 4 Go compressée (3 volumes), soit ~13 éditions × 3 volumes
   par run regroupés dans **une seule** release : c'est la raison de la rétention courte des
   artefacts, les releases prenant le relais pour la conservation longue.

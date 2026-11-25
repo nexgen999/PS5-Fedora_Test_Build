@@ -20,9 +20,11 @@ nom de l'image et des archives vient de `image.name` dans le YAML.
 | Dev | `fedora-dev_edition.yaml` | `ps5-fedora-dev_edition` | 189 | GNOME (Wayland) | GDM + autologin |
 | Gaming | `fedora-gaming_edition.yaml` | `ps5-fedora-gaming_edition` | 176 | GNOME (Wayland) | GDM + autologin |
 | Test | `fedora-test_build.yaml` | `ps5-fedora-test_build` | 194 | GNOME (Wayland) | GDM + autologin |
-| Minimal | `fedora-minimal_setup.yaml` | `ps5-fedora-minimal_setup` | 39 | aucune (CLI) | console / SSH |
+| Minimal | `fedora-minimal_setup.yaml` | `ps5-fedora-minimal_setup` | 40 | aucune (CLI) | console / SSH |
 | COSMIC | `fedora-cosmic_edition.yaml` | `ps5-fedora-cosmic_edition` | 137 | COSMIC (Wayland) | cosmic-greeter (greetd) |
 | KDE | `fedora-kde_edition.yaml` | `ps5-fedora-kde_edition` | 137 | Plasma 6 (Wayland) | SDDM |
+| Cinnamon | `fedora-cinnamon_edition.yaml` | `ps5-fedora-cinnamon_edition` | 145 | Cinnamon (X11) | LightDM + autologin |
+| Budgie | `fedora-budgie_edition.yaml` | `ps5-fedora-budgie_edition` | 145 | Budgie (Wayland labwc, Xorg dispo) | SDDM + autologin |
 | Sway | `fedora-sway_edition.yaml` | `ps5-fedora-sway_edition` | 137 | Sway (Wayland) | SDDM |
 | Niri | `fedora-niri_edition.yaml` | `ps5-fedora-niri_edition` | 137 | Niri (Wayland) | SDDM |
 | Miracle WM | `fedora-miraclewm_edition.yaml` | `ps5-fedora-miraclewm_edition` | 137 | Miracle WM (Wayland) | SDDM |
@@ -53,8 +55,13 @@ Tout ce qui suit est présent dans **chaque** image Fedora, quelle que soit l'é
 - Rootfs extensible (`grow-rootfs.service`), zram = moitié de la RAM en zstd, SELinux
   désactivé.
 - XWayland (`xorg-x11-server-Xwayland`) pour les applications X11, polkit, portals,
-  polices, `bash-completion`.
-- Toutes les sessions sont **Wayland** ; il n'y a pas de session X11 complète.
+  polices, `bash-completion`. Les éditions Cinnamon et Budgie embarquent en plus le
+  serveur Xorg complet (`xorg-x11-server-Xorg` + pilote `amdgpu`) : session X11 native
+  pour Cinnamon, secours X11 pour Budgie qui démarre en Wayland (labwc).
+- **Mise en veille désactivée** : `sleep.target`, `suspend.target`, `hibernate.target` et
+  `hybrid-sleep.target` sont masqués, `logind` ignore l'inactivité et la commande
+  `sudo ps5-no-sleep` (relancée à chaque login pour l'écran) coupe aussi l'extinction
+  automatique de l'écran (GNOME, Cinnamon, Budgie, KDE Plasma).
 
 Commun à toutes **sauf `minimal_setup`** :
 
@@ -134,7 +141,28 @@ Détails utiles :
 **COSMIC** pour un bureau moderne proche de GNOME, **Sway/Miracle WM** pour du pavage
 i3-like, **Niri** pour du pavage défilant.
 
-## Minimal — `fedora-minimal_setup.yaml` → 39 paquets
+## Famille X11 / Budgie (145 paquets listés)
+
+Deux builds qui reprennent le socle de la famille Wayland (portals, GVfs,
+PipeWire/WirePlumber, Mesa, impression, toolchain, `gtk4`/`libadwaita`) en y ajoutant le
+socle X11 complet et l'agent polkit graphique nécessaire à `pkexec` :
+
+| Édition | Installation | Session / autologin |
+|---|---|---|
+| Cinnamon | `@cinnamon-desktop-environment` + `lightdm`/`slick-greeter`, `polkit-gnome` | LightDM, `user-session=cinnamon` (session X11), autologin `ps5` (groupe `autologin`) |
+| Budgie | `@budgie-desktop-environment` + `budgie-desktop-apps`, SDDM, `polkit-gnome` | SDDM, `Session=` détecté dans `/usr/share/wayland-sessions` (labwc) ou `/usr/share/xsessions` |
+
+- **X11 et XWayland** : `xorg-x11-server-Xorg`, le pilote `amdgpu` et XWayland sont
+  installés dans les deux éditions. Cinnamon ouvre une session X11 comme le spin Fedora ;
+  Budgie démarre en Wayland (labwc) et fait tourner les applications X11 via XWayland.
+- Le nom de session n'est pas figé : `post-files` lit les fichiers `.desktop` réellement
+  installés et écrit la valeur dans la configuration du gestionnaire de session
+  (`/etc/lightdm/lightdm.conf.d/50-ps5-autologin.conf` ou
+  `/etc/sddm.conf.d/autologin.conf`).
+- Chaque édition **échoue explicitement** si le bureau n'est pas installé : pas d'image
+  sans session graphique.
+
+## Minimal — `fedora-minimal_setup.yaml` → 40 paquets
 
 Aucune session graphique : SSH, NetworkManager (+ WiFi), noyau PS5, fan/boost, WiFi
 interne, zram, grow-rootfs, `git`/`make`/`gcc` (nécessaires pour compiler `ps5_control`),
@@ -151,6 +179,8 @@ Idéale comme base serveur ou pour partir d'un système nu et ajouter ce qu'on v
 | Jouer (Steam, MangoHud…) | Gaming |
 | Tester sans polluer la base | Test |
 | Bureau Wayland non-GNOME | KDE, COSMIC, Sway, Niri ou Miracle WM |
+| Bureau X11 classique | Cinnamon |
+| Bureau Budgie (Wayland sous labwc) | Budgie |
 | Serveur / console | Minimal |
 
 ## Construire une édition
@@ -191,7 +221,8 @@ ne touche que `tools/**`, `**.md` ou `.gitignore`).
   checksums publiés dans chaque release.
 - Le mot de passe `ps5` est public : à changer après le premier boot si la machine est
   exposée au réseau.
-- Toutes les sessions sont Wayland ; une application qui exige un serveur X11 complet ne
-  fonctionnera pas (XWayland couvre la majorité des cas).
+- Seule l'édition Cinnamon ouvre une session X11 complète ; les autres tournent en Wayland,
+  où XWayland couvre la majorité des applications X11. Le serveur Xorg est présent dans la
+  famille GNOME, Cinnamon et Budgie pour les cas restants.
 - Les anciennes releases sont élaguées à 5 (`KEEP_RELEASES`, une release par run), et les
   artefacts CI expirent après 7 jours.

@@ -31,6 +31,14 @@ on:
         description: 'image — base GNOME (ps5-fedora)'
         type: boolean
         default: false
+      fedora-budgie_edition:
+        description: 'fedora-budgie_edition — Budgie (ps5-fedora-budgie_edition)'
+        type: boolean
+        default: false
+      fedora-cinnamon_edition:
+        description: 'fedora-cinnamon_edition — Cinnamon X11 (ps5-fedora-cinnamon_edition)'
+        type: boolean
+        default: false
       fedora-cosmic_edition:
         description: 'fedora-cosmic_edition — COSMIC (ps5-fedora-cosmic_edition)'
         type: boolean

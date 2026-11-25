@@ -193,7 +193,9 @@ Key points:
 - `ps5-linux-tools` is compiled during the build: the `git`, `make`, `gcc` toolchain
   (plus `binutils`, `pkgconf`) must stay in the editions that use it.
 - Blocks present in every build: kernel, internal WiFi, fan ON/boost ON, PS5 Fedora
-  Manager, RPM Fusion, Flathub, grow-rootfs, SELinux, default user, zram.
+  Manager, RPM Fusion, Flathub, grow-rootfs, SELinux, default user, zram, and sleep fully
+  disabled (`sudo ps5-no-sleep`: `sleep`/`suspend`/`hibernate` targets masked, `logind`
+  idle ignored, XDG autostart for the screen).
 
 ## Adding an edition
 

@@ -25,7 +25,7 @@ Index des documents du dépôt. Chaque sujet existe en français et en anglais.
 
 | Fichier | Sujet |
 |---|---|
-| [`editions_fr.md`](editions_fr.md) / [`editions_en.md`](editions_en.md) | les 11 builds Fedora : contenu, bureau, connexion, quand la choisir, limites |
+| [`editions_fr.md`](editions_fr.md) / [`editions_en.md`](editions_en.md) | les 13 builds Fedora : contenu, bureau, connexion, quand la choisir, limites |
 | [`builder_fr.md`](builder_fr.md) / [`builder_en.md`](builder_en.md) | `build_image.sh`, étapes noyau/rootfs/image, options, sorties |
 | [`editor_fr.md`](editor_fr.md) / [`editor_en.md`](editor_en.md) | éditeur Tkinter : paquets, blocs, ajouts, comparatif |
 | [`ci_fr.md`](ci_fr.md) / [`ci_en.md`](ci_en.md) | workflow GitHub Actions, parallélisme, cache, artefacts, releases |

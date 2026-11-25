@@ -20,9 +20,11 @@ come from `image.name` inside the YAML.
 | Dev | `fedora-dev_edition.yaml` | `ps5-fedora-dev_edition` | 189 | GNOME (Wayland) | GDM + autologin |
 | Gaming | `fedora-gaming_edition.yaml` | `ps5-fedora-gaming_edition` | 176 | GNOME (Wayland) | GDM + autologin |
 | Test | `fedora-test_build.yaml` | `ps5-fedora-test_build` | 194 | GNOME (Wayland) | GDM + autologin |
-| Minimal | `fedora-minimal_setup.yaml` | `ps5-fedora-minimal_setup` | 39 | none (CLI) | console / SSH |
+| Minimal | `fedora-minimal_setup.yaml` | `ps5-fedora-minimal_setup` | 40 | none (CLI) | console / SSH |
 | COSMIC | `fedora-cosmic_edition.yaml` | `ps5-fedora-cosmic_edition` | 137 | COSMIC (Wayland) | cosmic-greeter (greetd) |
 | KDE | `fedora-kde_edition.yaml` | `ps5-fedora-kde_edition` | 137 | Plasma 6 (Wayland) | SDDM |
+| Cinnamon | `fedora-cinnamon_edition.yaml` | `ps5-fedora-cinnamon_edition` | 145 | Cinnamon (X11) | LightDM + autologin |
+| Budgie | `fedora-budgie_edition.yaml` | `ps5-fedora-budgie_edition` | 145 | Budgie (Wayland labwc, Xorg available) | SDDM + autologin |
 | Sway | `fedora-sway_edition.yaml` | `ps5-fedora-sway_edition` | 137 | Sway (Wayland) | SDDM |
 | Niri | `fedora-niri_edition.yaml` | `ps5-fedora-niri_edition` | 137 | Niri (Wayland) | SDDM |
 | Miracle WM | `fedora-miraclewm_edition.yaml` | `ps5-fedora-miraclewm_edition` | 137 | Miracle WM (Wayland) | SDDM |
@@ -129,7 +131,28 @@ How to choose: **KDE** for the Qt ecosystem and graphical settings, **COSMIC** f
 modern GNOME-like desktop, **Sway/Miracle WM** for i3-style tiling, **Niri** for
 scrollable tiling.
 
-## Minimal — `fedora-minimal_setup.yaml` → 39 packages
+## X11 / Budgie family (145 listed packages)
+
+Two builds that start from the Wayland family base (portals, GVfs, PipeWire/WirePlumber,
+Mesa, printing, dev toolchain, `gtk4`/`libadwaita`) and add the full X11 stack plus the
+graphical polkit agent `pkexec` needs:
+
+| Edition | Installation | Session / autologin |
+|---|---|---|
+| Cinnamon | `@cinnamon-desktop-environment` + `lightdm`/`slick-greeter`, `polkit-gnome` | LightDM, `user-session=cinnamon` (X11 session), `ps5` autologin (`autologin` group) |
+| Budgie | `@budgie-desktop-environment` + `budgie-desktop-apps`, SDDM, `polkit-gnome` | SDDM, `Session=` detected in `/usr/share/wayland-sessions` (labwc) or `/usr/share/xsessions` |
+
+- **X11 and XWayland**: `xorg-x11-server-Xorg`, the `amdgpu` driver and XWayland are
+  installed in both editions. Cinnamon runs an X11 session like the Fedora spin; Budgie
+  starts on Wayland (labwc) and runs X11 apps through XWayland.
+- The session name is not hard-coded: `post-files` reads the installed `.desktop` files and
+  writes the value into the display manager config
+  (`/etc/lightdm/lightdm.conf.d/50-ps5-autologin.conf` or
+  `/etc/sddm.conf.d/autologin.conf`).
+- Each edition **fails loudly** if the desktop is missing: no image without a graphical
+  session.
+
+## Minimal — `fedora-minimal_setup.yaml` → 40 packages
 
 No graphical session: SSH, NetworkManager (+ WiFi), PS5 kernel, fan/boost, internal WiFi,
 zram, grow-rootfs, `git`/`make`/`gcc` (needed to build `ps5_control`), console fonts,
@@ -146,6 +169,8 @@ starting point.
 | Play (Steam, MangoHud…) | Gaming |
 | Try changes without touching the base | Test |
 | Non-GNOME Wayland desktop | KDE, COSMIC, Sway, Niri or Miracle WM |
+| Classic X11 desktop | Cinnamon |
+| Budgie desktop (Wayland on labwc) | Budgie |
 | Server / console only | Minimal |
 
 ## Building one edition
@@ -184,7 +209,8 @@ After a change, `git push` to `main` triggers a rebuild (unless the commit only 
   (`skip_verification: true`): the chain relies on HTTPS and on the checksums published in
   each release.
 - The `ps5` password is public: change it after the first boot if the machine is exposed.
-- Every session is Wayland; an application requiring a full X11 server will not work
-  (XWayland covers most cases).
+- Only Cinnamon opens a full X11 session; the others run Wayland, where XWayland covers
+  most X11 applications. The Xorg server ships in the GNOME family, Cinnamon and Budgie for
+  the remaining cases.
 - Old releases are pruned to 5 (`KEEP_RELEASES`, one release per run), and CI artifacts
   expire after 7 days.

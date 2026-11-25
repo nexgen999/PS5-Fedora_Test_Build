@@ -1,6 +1,6 @@
 # PS5 Linux Image Builder
 
-Builds bootable Linux USB images for PlayStation 5 using Docker containers. Supports Ubuntu 26.04, Arch, CachyOS (Gamescope + Steam), Fedora (GNOME), individually or as a multi-distro image with kexec switching.
+Builds bootable Linux USB images for PlayStation 5 using Docker containers. Supports Ubuntu 26.04, Arch, CachyOS (Gamescope + Steam), Fedora (GNOME, KDE Plasma, Cinnamon, Budgie, COSMIC, Sway, Niri, Miracle WM), individually or as a multi-distro image with kexec switching.
 
 ## Documentation
 

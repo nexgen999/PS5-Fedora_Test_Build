@@ -153,6 +153,6 @@ Volumes are 1.5 GiB to stay under GitHub's 2 GiB per-file limit.
   compresses it into a shorter window.
 - Artifact and cache limits: 10 GB of cache per repository, artifacts counted in the
   repository quota (1 to 7 days retention).
-- A full image is ~3-4 GB compressed (3 volumes), so ~11 editions × 3 volumes per run
+- A full image is ~3-4 GB compressed (3 volumes), so ~13 editions × 3 volumes per run
   inside **a single** release: that is why artifact retention is short and releases carry
   long-term storage.
